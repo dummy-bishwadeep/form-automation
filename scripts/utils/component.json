@@ -29,7 +29,8 @@
     "hideLabel": true,
     "key": "textField",
     "type": "textfield",
-    "input": true
+    "input": true,
+    "rows": 1
   },
   "number_field": {
     "label": "Number",
@@ -46,7 +47,9 @@
     "truncateMultipleSpaces": false,
     "key": "number",
     "type": "number",
-    "input": true
+    "input": true,
+    "rows": 1,
+    "customClass": "w-150px"
   },
   "drop_down_field": {
     "label": "Select",
@@ -60,7 +63,7 @@
     "validate": {
       "required": true
     },
-    "customClass": "text-center w-150px",
+    "customClass": "w-150px",
     "key": "select",
     "type": "select",
     "input": true
@@ -73,8 +76,10 @@
   "tableView": true,
   "key": "textArea",
   "type": "textarea",
-  "input": true
-},
+  "input": true,
+  "rows": 1,
+  "customClass": "w-150px"
+  },
   "auto_fetch_field": {
     "label": "Text Field",
     "applyMaskOn": "change",
@@ -84,7 +89,7 @@
       "style": "text-align:center"
     },
     "tableView": true,
-    "customClass": "text-center w-150px",
+    "customClass": "w-150px",
     "key": "textField",
     "type": "textfield",
     "input": true
@@ -101,7 +106,7 @@
     "monthlyPicker": false,
     "enableTime": false
   },
-  "customClass": "text-center  w-150px",
+  "customClass": "w-150px",
   "hideLabel": true,
   "tableView": false,
   "key": "date",
@@ -109,17 +114,25 @@
   "input": true
 },
   "sign":{
-  "label": "",
-  "applyMaskOn": "change",
-  "mask": false,
-  "spellcheck": true,
-  "tableView": false,
-  "inputFormat": "plain",
-  "truncateMultipleSpaces": false,
-  "key": "textField",
-  "type": "DigitalSignature",
-  "input": true
-},
+    "label": "",
+    "applyMaskOn": "change",
+    "mask": false,
+    "spellcheck": true,
+    "tableView": false,
+    "inputFormat": "plain",
+    "truncateMultipleSpaces": false,
+    "key": "textField",
+    "type": "DigitalSignature",
+    "input": true,
+    "validate": {
+      "customMessage": "Please E-Sign and Save"
+    },
+    "customClass": "text-center",
+      "properties": {
+      "manual_entry": "true",
+      "signature_keys": "sign"
+    }
+  },
   "check_box": {
   "label": "Checkbox",
   "tableView": false,
@@ -158,7 +171,7 @@
     "label": "Radio",
     "optionsLabelPosition": "right",
     "inline": false,
-    "customClass": "text-center w-150px",
+    "customClass": "w-150px",
     "hideLabel": true,
     "tableView": false,
     "values": [],
@@ -167,7 +180,7 @@
     "input": true
   },
   "table": {
-    "label": "Table",
+    "label": "<b></b>",
     "cellAlignment": "left",
     "hideLabel": true,
     "key": "table",
@@ -183,7 +196,7 @@
     "type": "time",
     "input": true,
     "inputMask": "99:99",
-    "customClass": "text-center w-150px",
+    "customClass": "w-150px",
     "attributes": {
       "style": "text-align:center"
     }
@@ -280,7 +293,8 @@
         "style": "text-align:center"
     },
     "type": "textfield",
-    "input": true
+    "input": true,
+    "rows": 1
 },
   "panel": {
     "collapsible": false,
@@ -290,6 +304,34 @@
     "label": "Panel",
     "input": false,
     "tableView": false,
+    "components": []
+  },
+  "customTable": {
+    "label": "<b></b>",
+    "cellAlignment": "left",
+    "hideLabel": true,
+    "key": "customTable",
+    "type": "customTable",
+    "bordered": "true",
+    "input": false,
+    "tableView": false,
+    "rows": [
+    ]
+  },
+  "dataGrid": {
+    "label": "<b></b>",
+    "reorder": false,
+    "addAnotherPosition": "bottom",
+    "layoutFixed": false,
+    "enableRowGroups": false,
+    "initEmpty": false,
+    "tableView": false,
+    "defaultValue": [
+      {}
+    ],
+    "key": "dataGrid",
+    "type": "datagrid",
+    "input": true,
     "components": []
   }
 }
