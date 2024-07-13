@@ -10,6 +10,6 @@ app.include_router(services.router)
 # starting the application
 if __name__ == "__main__":
     try:
-        uvicorn.run(services.router, host=Services.HOST, port=Services.PORT)
+        uvicorn.run("main:app", host=Services.HOST, port=Services.PORT, reload=True)
     except Exception as e:
         logger.exception(e)

@@ -281,7 +281,17 @@
     },
     "type": "textfield",
     "input": true
-}
+},
+  "panel": {
+    "collapsible": false,
+    "hideLabel": true,
+    "key": "panel",
+    "type": "panel",
+    "label": "Panel",
+    "input": false,
+    "tableView": false,
+    "components": []
+  }
 }
 
 
