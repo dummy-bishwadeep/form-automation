@@ -146,7 +146,7 @@ class FormHandler:
             _df = _df.iloc[row:]
             if next_non_none_row and not from_parent_section:
                 # Keep only rows up to the specific row index (exclusive)
-                _df = _df.iloc[:next_non_none_row]
+                _df = _df.iloc[:next_non_none_row-row]
 
             if not from_parent_section:
                 _df.drop(index=row, inplace=True)
@@ -155,8 +155,10 @@ class FormHandler:
             _df.dropna(how='all', inplace=True, axis=1)
             arr = _df.to_numpy()
             table_no_rows, table_num_cols = _df.shape
-            if child == 'rows':
+            if child in ['rows', "dataGrid"]:
                 unique_key = 'table'
+                if child == 'dataGrid':
+                    unique_key = "dataGrid"
                 if unique_key in self.unique_key_counter:
                     unique_key_count = self.unique_key_counter[unique_key]
                     self.unique_key_counter[unique_key] += unique_key_count
@@ -431,7 +433,7 @@ class FormHandler:
                     elif cell_value is not None and (re.search(r"<table.*>", cell_value) or re.search(r"<customTable.*>", cell_value)):
                         _pattern = r"<table:(.*?)>"
                         _table_json = copy.deepcopy(self.component_json.get('table'))
-                        section_exists = re.search(r"<panel:.*>", cell_value)
+                        section_exists = re.search(r"<table:.*>", cell_value)
                         if re.search(r"<customTable.*>", cell_value):
                             _table_json = copy.deepcopy(self.component_json.get('customTable'))
                             section_exists = re.search(r"<customTable:.*>", cell_value)
@@ -454,12 +456,19 @@ class FormHandler:
                         else:
                             row_list.append(_table_json)
 
-                    # elif cell_value is not None and (
-                    #         re.search(r"<dataGrid.*>", cell_value) or re.search(r"<customTable.*>", cell_value))
-                if child == 'rows':
-                    if col_list:
-                        row_list.append(col_list)
-            table_json[child] = row_list
+                    elif cell_value is not None and (re.search(r"<dataGrid.*>", cell_value)):
+                        _datagrid_json = copy.deepcopy(self.component_json.get('dataGrid'))
+                        _datagrid_json, _index_list = self.process_table_json(_df, new_row, new_col, _datagrid_json, child="dataGrid")
+                        if merge_properties:
+                            _datagrid_json['properties'] = merge_properties
+                        row_list.append(_datagrid_json)
+
+                if child == 'rows' and col_list:
+                    row_list.append(col_list)
+            if child == 'dataGrid':
+                table_json["components"] = row_list
+            else:
+                table_json[child] = row_list
             return table_json, index_list
         except Exception as table_error:
             logger.error(table_error)
