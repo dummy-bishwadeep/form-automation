@@ -60,9 +60,6 @@
     "data": {
       "values": []
     },
-    "validate": {
-      "required": true
-    },
     "customClass": "w-150px",
     "key": "select",
     "type": "select",
@@ -162,6 +159,7 @@
         "currentWidth": 6
       }
     ],
+    "hideLabel": true,
     "key": "columns",
     "type": "columns",
     "input": false,

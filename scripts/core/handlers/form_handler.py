@@ -36,12 +36,13 @@ class FormHandler:
                         continue
 
                     cell_value = arr[row][col]
-                    if cell_value is not None and (re.search(r"<table.*>", cell_value) or re.search(r"<customTable.*>", cell_value)):
-                        table_json = copy.deepcopy(self.component_json.get('table'))
-                        table_json, index_list = self.process_table_json(df, row, col, table_json, child="rows")
-                        components_list.append(table_json)
+                    # if cell_value is not None and (re.search(r"<table.*>", cell_value) or re.search(r"<customTable.*>", cell_value)):
+                    #     table_json = copy.deepcopy(self.component_json.get('table'))
+                    #     table_json, index_list = self.process_table_json(df, row, col, table_json, child="rows")
+                    #     if table_json:
+                    #         components_list.append(table_json)
 
-                    elif cell_value is not None and re.search(r"<html.*>", cell_value):
+                    if cell_value is not None and re.search(r"<html.*>", cell_value):
                         html_components = copy.deepcopy(self.component_json.get("html_compo"))
                         content = str(cell_value).replace("<html>", "").replace('{', '').replace('}', '').strip()
                         html_components["customClass"] = "text-left"
@@ -65,16 +66,175 @@ class FormHandler:
                         else:
                             self.unique_key_counter[unique_key] = 1
                         text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        # text_area["customClass"] = "w-150px"
                         _match = re.search(r'\{(.*?)\}', cell_value)
                         label = _match.group(1) if _match else ''
                         text_area['label'] = f"<h6> <b>{label}</b> </h6>"
-                        # if merge_properties:
-                        #     text_area['properties'] = merge_properties
                         if label:
                             text_area['hideLabel'] = False
                         if text_area:
                             components_list.append(text_area)
+
+                    elif cell_value is not None and re.search(r"<panel.*>", cell_value):
+                        _panel_json = copy.deepcopy(self.component_json.get('panel'))
+                        _panel_json, index_list = self.process_table_json(df, row, col, _panel_json,
+                                                                           child='components')
+                        if _panel_json:
+                            components_list.append(_panel_json)
+
+                    elif cell_value is not None and re.search(r"<date.*>", cell_value):
+                        date_filed = copy.deepcopy(self.component_json.get("date_time_picker"))
+                        unique_key = 'date'
+                        if unique_key in self.unique_key_counter:
+                            unique_key_count = self.unique_key_counter[unique_key]
+                            self.unique_key_counter[unique_key] += unique_key_count
+                        else:
+                            self.unique_key_counter[unique_key] = 1
+                        _match = re.search(r'\{(.*?)\}', cell_value)
+                        label = _match.group(1) if _match else ''
+                        date_filed['label'] = f"<h6> <b>{label}</b> </h6>"
+                        if label:
+                            date_filed['hideLabel'] = False
+                        date_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        if date_filed:
+                            components_list.append(date_filed)
+
+                    elif cell_value is not None and re.search(r"<time.*>", cell_value):
+                        time_filed = copy.deepcopy(self.component_json.get("time"))
+                        unique_key = 'time'
+                        if unique_key in self.unique_key_counter:
+                            unique_key_count = self.unique_key_counter[unique_key]
+                            self.unique_key_counter[unique_key] += unique_key_count
+                        else:
+                            self.unique_key_counter[unique_key] = 1
+                        time_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        _match = re.search(r'\{(.*?)\}', cell_value)
+                        label = _match.group(1) if _match else ''
+                        time_filed['label'] = f"<h6> <b>{label}</b> </h6>"
+                        if label:
+                            time_filed['hideLabel'] = False
+                        time_filed["properties"] = {"manual_entry": "true"}
+                        if time_filed:
+                            components_list.append(time_filed)
+
+
+                    elif cell_value is not None and re.search(r"<select.*>", cell_value):
+                        data = []
+                        dropdown_field = copy.deepcopy(self.component_json.get("drop_down_field"))
+                        data_list = self.extract_dropdown_values(cell_value)
+                        unique_key = 'select'
+                        if unique_key in self.unique_key_counter:
+                            unique_key_count = self.unique_key_counter[unique_key]
+                            self.unique_key_counter[unique_key] += unique_key_count
+                        else:
+                            self.unique_key_counter[unique_key] = 1
+                        dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        # dropdown_field["customClass"] = "w-150px"
+                        _match = re.search(r'\{(.*?)\}', cell_value)
+                        label = _match.group(1) if _match else ''
+                        dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
+                        if label:
+                            dropdown_field['hideLabel'] = False
+                        for item in data_list:
+                            data.append({
+                                "label": item,
+                                "value": item
+                            })
+                        dropdown_field.get('data')['values'] = data
+                        if dropdown_field:
+                            components_list.append(dropdown_field)
+
+                    elif cell_value is not None and re.search(r"<radio.*>", cell_value):
+                        data = []
+                        dropdown_field = copy.deepcopy(self.component_json.get("radio_button"))
+                        data_list = self.extract_dropdown_values(cell_value)
+                        unique_key = 'radio'
+                        if unique_key in self.unique_key_counter:
+                            unique_key_count = self.unique_key_counter[unique_key]
+                            self.unique_key_counter[unique_key] += unique_key_count
+                        else:
+                            self.unique_key_counter[unique_key] = 1
+                        dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        # dropdown_field["customClass"] = "w-150px"
+                        _match = re.search(r'\{(.*?)\}', cell_value)
+                        label = _match.group(1) if _match else ''
+                        dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
+                        if label:
+                            dropdown_field['hideLabel'] = False
+                        for item in data_list:
+                            data.append({
+                                "label": item,
+                                "value": item
+                            })
+                        dropdown_field['values'] = data
+                        if dropdown_field:
+                            components_list.append(dropdown_field)
+
+                    elif cell_value is not None and re.search(r"<number.*>", cell_value):
+                        number_field = copy.deepcopy(self.component_json.get("number_field"))
+                        unique_key = 'number'
+                        if unique_key in self.unique_key_counter:
+                            unique_key_count = self.unique_key_counter[unique_key]
+                            self.unique_key_counter[unique_key] += unique_key_count
+                        else:
+                            self.unique_key_counter[unique_key] = 1
+                        number_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        number_field["properties"] = {"manual_entry": "true"}
+                        # number_field["customClass"] = "w-150px"
+                        _match = re.search(r'\{(.*?)\}', cell_value)
+                        label = _match.group(1) if _match else ''
+                        number_field['label'] = f"<h6> <b>{label}</b> </h6>"
+                        if label:
+                            number_field['hideLabel'] = False
+                        if number_field:
+                            components_list.append(number_field)
+
+                    elif cell_value is not None and re.search(r"<divider.*>", cell_value):
+                        html_components = copy.deepcopy(self.component_json.get("html_compo"))
+                        html_components["content"] = f"<p style='word-break: break-word;'> </p>"
+                        if html_components:
+                            components_list.append(html_components)
+
+                    elif cell_value is not None and re.search(r"<sign.*>", cell_value):
+                        digital_sign = copy.deepcopy(self.component_json.get("sign"))
+                        unique_key = 'sign'
+                        if unique_key in self.unique_key_counter:
+                            unique_key_count = self.unique_key_counter[unique_key]
+                            self.unique_key_counter[unique_key] += unique_key_count
+                        else:
+                            self.unique_key_counter[unique_key] = 1
+                        digital_sign["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        _match = re.search(r'\{(.*?)\}', cell_value)
+                        label = _match.group(1) if _match else 'sign'
+                        digital_sign['label'] = f"<h6> <b>{label}</b> </h6>"
+                        if label:
+                            digital_sign['hideLabel'] = True
+                            if label == 'sign':
+                                digital_sign['label'] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        if digital_sign:
+                            components_list.append(digital_sign)
+
+                    elif cell_value is not None and (re.search(r"<table.*>", cell_value) or re.search(r"<customTable.*>", cell_value)):
+                        _pattern = r"<table:(.*?)>"
+                        table_json = copy.deepcopy(self.component_json.get('table'))
+                        if re.search(r"<customTable.*>", cell_value):
+                            table_json = copy.deepcopy(self.component_json.get('customTable'))
+
+                        table_json, index_list = self.process_table_json(df, row, col, table_json,
+                                                                           child="rows")
+                        if table_json:
+                            components_list.append(table_json)
+
+                    elif cell_value is not None and (re.search(r"<dataGrid.*>", cell_value)):
+                        datagrid_json = copy.deepcopy(self.component_json.get('dataGrid'))
+                        datagrid_json, index_list = self.process_table_json(df, row, col, datagrid_json, child="dataGrid")
+                        if datagrid_json:
+                            components_list.append(datagrid_json)
+
+                    elif cell_value is not None and re.search(r"<columns.*>", cell_value):
+                        table_json = copy.deepcopy(self.component_json.get('columns'))
+                        table_json, index_list = self.process_table_json(df, row, col, table_json, child="columns")
+                        if table_json:
+                            components_list.append(table_json)
 
             with open(f'assets/{self.sheet_name}.json', 'w') as json_file:
                 json.dump({"components": components_list}, json_file, indent=4)
@@ -368,6 +528,38 @@ class FormHandler:
                         else:
                             row_list.append(dropdown_field)
 
+                    elif cell_value is not None and re.search(r"<radio.*>", cell_value):
+                        data = []
+                        dropdown_field = copy.deepcopy(self.component_json.get("radio_button"))
+                        data_list = self.extract_dropdown_values(cell_value)
+                        unique_key = 'radio'
+                        if unique_key in self.unique_key_counter:
+                            unique_key_count = self.unique_key_counter[unique_key]
+                            self.unique_key_counter[unique_key] += unique_key_count
+                        else:
+                            self.unique_key_counter[unique_key] = 1
+                        dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        # dropdown_field["customClass"] = "w-150px"
+                        _match = re.search(r'\{(.*?)\}', cell_value)
+                        label = _match.group(1) if _match else ''
+                        dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
+                        if merge_properties:
+                            dropdown_field['properties'] = merge_properties
+                        if label:
+                            dropdown_field['hideLabel'] = False
+                        for item in data_list:
+                            data.append({
+                                "label": item,
+                                "value": item
+                            })
+                        dropdown_field['values'] = data
+                        if child == 'rows':
+                            current_component["components"].append(dropdown_field)
+                            if current_component:
+                                col_list.append(current_component)
+                        else:
+                            row_list.append(dropdown_field)
+
                     elif cell_value is not None and re.search(r"<number.*>", cell_value):
                         number_field = copy.deepcopy(self.component_json.get("number_field"))
                         unique_key = 'number'
@@ -463,17 +655,46 @@ class FormHandler:
                             _datagrid_json['properties'] = merge_properties
                         row_list.append(_datagrid_json)
 
+                    elif cell_value is not None and re.search(r"<columns.*>", cell_value):
+                        _pattern = r"<columns:(.*?)>"
+                        _table_json = copy.deepcopy(self.component_json.get('columns'))
+                        section_exists = re.search(r"<columns:.*>", cell_value)
+                        if section_exists:
+                            match = re.search(_pattern, cell_value)
+                            _sheet = match.group(1)
+                            __df, _wb_sheet, _ = self.convert_sheet_to_df(_sheet)
+                            _table_json, _index_list = self.process_table_json(__df, new_row, new_col, _table_json,
+                                                                               child="columns", from_parent_section=True, child_sheet=_wb_sheet)
+                        else:
+                            _table_json, _index_list = self.process_table_json(_df, new_row, new_col, _table_json, child="columns")
+                        if merge_properties:
+                            _table_json['properties'] = merge_properties
+                        if child == 'rows':
+                            current_component["components"].append(_table_json)
+                            if current_component:
+                                col_list.append(current_component)
+                        else:
+                            row_list.append(_table_json)
+
                 if child == 'rows' and col_list:
                     row_list.append(col_list)
             if child == 'dataGrid':
                 table_json["components"] = row_list
+            elif child == "columns":
+                if row_list:
+                    first_col = row_list[0]
+                    second_col = {}
+                    if len(row_list) > 1:
+                        second_col = row_list[1]
+                    if first_col:
+                        table_json[child][0]["components"].insert(0, first_col)
+                    if second_col:
+                        table_json[child][1]["components"].insert(0, second_col)
             else:
                 table_json[child] = row_list
             return table_json, index_list
         except Exception as table_error:
             logger.error(table_error)
-
-
 
     @staticmethod
     def process_component_json(df, row, col, parent_json):

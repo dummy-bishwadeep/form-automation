@@ -13,8 +13,6 @@ form_router = APIRouter(prefix="/json")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# new API
-
 
 @form_router.post("/generate_form", tags=["2. Generate Form"], description=Description.generate_form_desc)
 async def generate_form(sheet_name: str = Form(...), file: UploadFile = File(...)):
