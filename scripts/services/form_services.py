@@ -1,4 +1,7 @@
 import os
+import time
+from typing import Optional
+
 from fastapi import APIRouter, UploadFile, File, Form
 from starlette.responses import FileResponse
 from scripts.config.description import Description
@@ -15,7 +18,8 @@ form_router = APIRouter(prefix="/json")
 # ----------------------------------------------------------------------------------------------------------------------
 
 @form_router.post("/generate_form", tags=["2. Generate Form"], description=Description.generate_form_desc)
-async def generate_form(sheet_name: str = Form(...), file: UploadFile = File(...)):
+async def generate_form(sheet_name: str = Form(...),
+                        file: UploadFile = File(...)):
     """
     :param sheet_name:
     :param file:
@@ -27,8 +31,13 @@ async def generate_form(sheet_name: str = Form(...), file: UploadFile = File(...
         file_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as f:
             f.write(file_content)
-        merge_obj = FormHandler(file_path=file_path, sheet_name=sheet_name)
+
+        current_ts = int(time.time())
+        merge_obj = FormHandler(file_path=file_path,
+                                sheet_name=sheet_name,
+                                current_ts=current_ts)
         response = merge_obj.generate_form_json()
+        sheet_name = f'{sheet_name}_{current_ts}'
         json_file = f'assets/{sheet_name}.json'
         if response and os.path.exists(json_file):
             return FileResponse(json_file,

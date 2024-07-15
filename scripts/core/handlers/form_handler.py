@@ -1,33 +1,34 @@
 import copy
 import json
 import re
-
+import time
 import numpy as np
 import openpyxl
 import pandas as pd
-
-from scripts.config.constants import Logics
 from scripts.logging.logger import logger
 from scripts.utils.logbook_utils import LogbookUtils
 
 
 class FormHandler:
-    def __init__(self, file_path, sheet_name):
+    def __init__(self, file_path, sheet_name, current_ts):
         self.file_path = file_path
         self.sheet_name = sheet_name
         with open("scripts/utils/component.json", 'r') as file:
             self.component_json = json.load(file)
         self.workbook = openpyxl.load_workbook(self.file_path, data_only=True)
         self.unique_key_counter = {}
+        self.current_ts = current_ts
 
     def generate_form_json(self):
         try:
-
+            # convert excel data into dataframe
             df, _, _ = self.convert_sheet_to_df(self.sheet_name)
             table_no_rows, table_num_cols = df.shape
             arr = df.to_numpy()
             components_list = []
             index_list = []
+
+            # iterating through each rows and columns from the initial worksheet
             for row in range(0, table_no_rows):
                 if row in {tup[0] for tup in index_list}:
                     continue
@@ -36,214 +37,125 @@ class FormHandler:
                         continue
 
                     cell_value = arr[row][col]
-                    # if cell_value is not None and (re.search(r"<table.*>", cell_value) or re.search(r"<customTable.*>", cell_value)):
-                    #     table_json = copy.deepcopy(self.component_json.get('table'))
-                    #     table_json, index_list = self.process_table_json(df, row, col, table_json, child="rows")
-                    #     if table_json:
-                    #         components_list.append(table_json)
-
                     if cell_value is not None and re.search(r"<html.*>", cell_value):
-                        html_components = copy.deepcopy(self.component_json.get("html_compo"))
-                        content = str(cell_value).replace("<html>", "").replace('{', '').replace('}', '').strip()
-                        html_components["customClass"] = "text-left"
-                        html_components["content"] = f"<p style='word-break: break-word;'> {content} </p>"
-                        if html_components:
-                            components_list.append(html_components)
+                        components_list, _, _ = self.process_html_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and not re.search(r"<.*>", cell_value):
-                        html_components = copy.deepcopy(self.component_json.get("html_compo"))
-                        html_components["customClass"] = "text-left"
-                        html_components["content"] = "<h6>" + "<center>" + "<b>" + str(cell_value) + "</b>" + "</center>" + "</h6>"
-                        if html_components:
-                            components_list.append(html_components)
+                        components_list, _, _ = self.process_header_html_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and (re.search(r"<text_area.*>", cell_value) or re.search(r"<text_field.*>", cell_value)):
-                        text_area = copy.deepcopy(self.component_json.get("text area"))
-                        unique_key = 'textarea'
-                        if re.search(r"<text_field.*>", cell_value):
-                            text_area = copy.deepcopy(self.component_json.get('text_field'))
-                            unique_key = 'textfield'
-
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        text_area['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            text_area['hideLabel'] = False
-                        if text_area:
-                            components_list.append(text_area)
+                        # text_area = copy.deepcopy(self.component_json.get("text area"))
+                        # unique_key = 'textarea'
+                        # if re.search(r"<text_field.*>", cell_value):
+                        #     text_area = copy.deepcopy(self.component_json.get('text_field'))
+                        #     unique_key = 'textfield'
+                        #
+                        # if unique_key in self.unique_key_counter:
+                        #     unique_key_count = self.unique_key_counter[unique_key]
+                        #     self.unique_key_counter[unique_key] += unique_key_count
+                        # else:
+                        #     self.unique_key_counter[unique_key] = 1
+                        # text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                        # _match = re.search(r'\{(.*?)\}', cell_value)
+                        # label = _match.group(1) if _match else ''
+                        # text_area['label'] = f"<h6> <b>{label}</b> </h6>"
+                        # if label:
+                        #     text_area['hideLabel'] = False
+                        # if text_area:
+                        #     components_list.append(text_area)
+                        components_list, _, _ = self.process_text_area_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and re.search(r"<panel.*>", cell_value):
-                        _panel_json = copy.deepcopy(self.component_json.get('panel'))
-                        _panel_json, index_list = self.process_table_json(df, row, col, _panel_json,
-                                                                           child='components')
-                        if _panel_json:
-                            components_list.append(_panel_json)
+                        components_list, _, _, index_list = self.process_panel_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list,
+                            row=row,
+                            col=col,
+                            df=df)
 
                     elif cell_value is not None and re.search(r"<date.*>", cell_value):
-                        date_filed = copy.deepcopy(self.component_json.get("date_time_picker"))
-                        unique_key = 'date'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        date_filed['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            date_filed['hideLabel'] = False
-                        date_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        if date_filed:
-                            components_list.append(date_filed)
+                        components_list, _, _ = self.process_date_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and re.search(r"<time.*>", cell_value):
-                        time_filed = copy.deepcopy(self.component_json.get("time"))
-                        unique_key = 'time'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        time_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        time_filed['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            time_filed['hideLabel'] = False
-                        time_filed["properties"] = {"manual_entry": "true"}
-                        if time_filed:
-                            components_list.append(time_filed)
-
+                        components_list, _, _ = self.process_time_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and re.search(r"<select.*>", cell_value):
-                        data = []
-                        dropdown_field = copy.deepcopy(self.component_json.get("drop_down_field"))
-                        data_list = self.extract_dropdown_values(cell_value)
-                        unique_key = 'select'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        # dropdown_field["customClass"] = "w-150px"
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            dropdown_field['hideLabel'] = False
-                        for item in data_list:
-                            data.append({
-                                "label": item,
-                                "value": item
-                            })
-                        dropdown_field.get('data')['values'] = data
-                        if dropdown_field:
-                            components_list.append(dropdown_field)
+                        components_list, _, _ = self.process_dropdown_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and re.search(r"<radio.*>", cell_value):
-                        data = []
-                        dropdown_field = copy.deepcopy(self.component_json.get("radio_button"))
-                        data_list = self.extract_dropdown_values(cell_value)
-                        unique_key = 'radio'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        # dropdown_field["customClass"] = "w-150px"
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            dropdown_field['hideLabel'] = False
-                        for item in data_list:
-                            data.append({
-                                "label": item,
-                                "value": item
-                            })
-                        dropdown_field['values'] = data
-                        if dropdown_field:
-                            components_list.append(dropdown_field)
+                        components_list, _, _ = self.process_radio_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and re.search(r"<number.*>", cell_value):
-                        number_field = copy.deepcopy(self.component_json.get("number_field"))
-                        unique_key = 'number'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        number_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        number_field["properties"] = {"manual_entry": "true"}
-                        # number_field["customClass"] = "w-150px"
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        number_field['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            number_field['hideLabel'] = False
-                        if number_field:
-                            components_list.append(number_field)
+                        components_list, _, _ = self.process_number_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and re.search(r"<divider.*>", cell_value):
-                        html_components = copy.deepcopy(self.component_json.get("html_compo"))
-                        html_components["content"] = f"<p style='word-break: break-word;'> </p>"
-                        if html_components:
-                            components_list.append(html_components)
+                        components_list, _, _ = self.process_divider_component(
+                            from_parent_itr=True,
+                            components_list=components_list)
 
                     elif cell_value is not None and re.search(r"<sign.*>", cell_value):
-                        digital_sign = copy.deepcopy(self.component_json.get("sign"))
-                        unique_key = 'sign'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        digital_sign["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else 'sign'
-                        digital_sign['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            digital_sign['hideLabel'] = True
-                            if label == 'sign':
-                                digital_sign['label'] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        if digital_sign:
-                            components_list.append(digital_sign)
+                        components_list, _, _ = self.process_esign_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
 
                     elif cell_value is not None and (re.search(r"<table.*>", cell_value) or re.search(r"<customTable.*>", cell_value)):
-                        _pattern = r"<table:(.*?)>"
-                        table_json = copy.deepcopy(self.component_json.get('table'))
-                        if re.search(r"<customTable.*>", cell_value):
-                            table_json = copy.deepcopy(self.component_json.get('customTable'))
-
-                        table_json, index_list = self.process_table_json(df, row, col, table_json,
-                                                                           child="rows")
-                        if table_json:
-                            components_list.append(table_json)
+                        components_list, _, _, index_list = self.process_table_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list,
+                            row=row,
+                            col=col,
+                            df=df)
 
                     elif cell_value is not None and (re.search(r"<dataGrid.*>", cell_value)):
-                        datagrid_json = copy.deepcopy(self.component_json.get('dataGrid'))
-                        datagrid_json, index_list = self.process_table_json(df, row, col, datagrid_json, child="dataGrid")
-                        if datagrid_json:
-                            components_list.append(datagrid_json)
+                        components_list, _, index_list = self.process_datagrid_component(
+                            from_parent_itr=True,
+                            components_list=components_list,
+                            row=row,
+                            col=col,
+                            df=df)
 
                     elif cell_value is not None and re.search(r"<columns.*>", cell_value):
-                        table_json = copy.deepcopy(self.component_json.get('columns'))
-                        table_json, index_list = self.process_table_json(df, row, col, table_json, child="columns")
-                        if table_json:
-                            components_list.append(table_json)
+                        components_list, _, _, index_list = self.process_columns_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list,
+                            row=row,
+                            col=col,
+                            df=df)
 
-            with open(f'assets/{self.sheet_name}.json', 'w') as json_file:
+            #storing final form json to a file
+            file_name = f'{self.sheet_name}_{self.current_ts}'
+            with open(f'assets/{file_name}.json', 'w') as json_file:
                 json.dump({"components": components_list}, json_file, indent=4)
-            print(f"JSON {self.sheet_name} created")
-            logger.info(f"{self.sheet_name} -> JSON created successfully!!!!!!!!!!!!")
+            print(f"JSON {file_name} created")
+            logger.info(f"{file_name} -> JSON created successfully!!!!!!!!!!!!")
             return True
 
         except Exception as e:
@@ -262,27 +174,6 @@ class FormHandler:
             return df, sheet, merged_cells
         except Exception as df_conversion_error:
             logger.error(df_conversion_error)
-
-    @staticmethod
-    def process_components():
-        try:
-            pass
-        except Exception as component_error:
-            logger.error(component_error)
-
-    @staticmethod
-    def process_rows():
-        try:
-            pass
-        except Exception as row_error:
-            logger.error(row_error)
-
-    @staticmethod
-    def process_column_json():
-        try:
-            pass
-        except Exception as column_error:
-            logger.error(column_error)
 
     def process_table_json(self, df, row, col, table_json, child='rows', from_parent_section=False, child_sheet=None):
         try:
@@ -381,308 +272,139 @@ class FormHandler:
 
                     current_component = {"components": []}
                     if cell_value is not None and re.search(r"<html.*>", cell_value):
-                        html_components = copy.deepcopy(self.component_json.get("html_compo"))
-                        content = str(cell_value).replace("<html>", "").replace('{', '').replace('}', '').strip()
-                        html_components["customClass"] = "text-left"
-                        html_components["content"] = f"<p style='word-break: break-word;'> {content} </p>"
-                        if merge_properties:
-                            html_components['properties'] = merge_properties
-                        if child == 'rows':
-                            current_component["components"].append(html_components)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(html_components)
+                        _, row_list, col_list = self.process_html_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and not re.search(r"<.*>", cell_value):
-                        html_components = copy.deepcopy(self.component_json.get("html_compo"))
-                        html_components["customClass"] = "text-left"
-                        html_components["content"] = "<h6>" + "<center>" + "<b>" + str(cell_value) + "</b>" + "</center>" + "</h6>"
-                        if merge_properties:
-                            html_components['properties'] = merge_properties
-                        if child == 'rows':
-                            current_component["components"].append(html_components)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(html_components)
+                        _, row_list, col_list = self.process_header_html_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<panel.*>", cell_value):
-                        section_exists = re.search(r"<panel:.*>", cell_value)
-                        _panel_json = copy.deepcopy(self.component_json.get('panel'))
-                        if section_exists:
-                            _pattern = r"<panel:(.*?)>"
-                            match = re.search(_pattern, cell_value)
-                            _sheet = match.group(1)
-                            __df, _wb_sheet, _ = self.convert_sheet_to_df(_sheet)
-                            _panel_json, _index_list = self.process_table_json(__df, new_row, new_col, _panel_json, child='components', from_parent_section=True, child_sheet=_wb_sheet)
-                        else:
-                            _panel_json, _index_list = self.process_table_json(_df, new_row, new_col, _panel_json,
-                                                                               child='components')
-
-                        if merge_properties:
-                            _panel_json['properties'] = merge_properties
-                        if child == 'rows':
-                            current_component["components"].append(_panel_json)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(_panel_json)
+                        _, row_list, col_list, _index_list = self.process_panel_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list,
+                            row=new_row,
+                            col=new_col,
+                            df=_df)
 
                     elif cell_value is not None and re.search(r"<date.*>", cell_value):
-                        date_filed = copy.deepcopy(self.component_json.get("date_time_picker"))
-                        unique_key = 'date'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        date_filed['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            date_filed['hideLabel'] = False
-                        date_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        if merge_properties:
-                            date_filed['properties'] = merge_properties
-                        if child == 'rows':
-                            current_component["components"].append(date_filed)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(date_filed)
+                        _, row_list, col_list = self.process_date_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<time.*>", cell_value):
-                        time_filed = copy.deepcopy(self.component_json.get("time"))
-                        unique_key = 'time'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        time_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        time_filed['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if merge_properties:
-                            time_filed['properties'] = merge_properties
-                        if label:
-                            time_filed['hideLabel'] = False
-                        time_filed["properties"] = {"manual_entry": "true"}
-                        if child == 'rows':
-                            current_component["components"].append(time_filed)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(time_filed)
+                        _, row_list, col_list = self.process_time_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list
+                        )
 
                     elif cell_value is not None and (
                             re.search(r"<text_area.*>", cell_value) or re.search(r"<text_field.*>", cell_value)):
-                        text_area = copy.deepcopy(self.component_json.get("text area"))
-                        unique_key = 'textarea'
-                        if re.search(r"<text_field.*>", cell_value):
-                            text_area = copy.deepcopy(self.component_json.get('text_field'))
-                            unique_key = 'textfield'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        # text_area["customClass"] = "w-150px"
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        text_area['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if merge_properties:
-                            text_area['properties'] = merge_properties
-                        if label:
-                            text_area['hideLabel'] = False
-                        if child == 'rows':
-                            current_component["components"].append(text_area)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(text_area)
+                        _, row_list, col_list = self.process_text_area_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<select.*>", cell_value):
-                        data = []
-                        dropdown_field = copy.deepcopy(self.component_json.get("drop_down_field"))
-                        data_list = self.extract_dropdown_values(cell_value)
-                        unique_key = 'select'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        # dropdown_field["customClass"] = "w-150px"
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if merge_properties:
-                            dropdown_field['properties'] = merge_properties
-                        if label:
-                            dropdown_field['hideLabel'] = False
-                        for item in data_list:
-                            data.append({
-                                "label": item,
-                                "value": item
-                            })
-                        dropdown_field.get('data')['values'] = data
-                        if child == 'rows':
-                            current_component["components"].append(dropdown_field)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(dropdown_field)
+                        _, row_list, col_list = self.process_dropdown_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<radio.*>", cell_value):
-                        data = []
-                        dropdown_field = copy.deepcopy(self.component_json.get("radio_button"))
-                        data_list = self.extract_dropdown_values(cell_value)
-                        unique_key = 'radio'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        # dropdown_field["customClass"] = "w-150px"
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if merge_properties:
-                            dropdown_field['properties'] = merge_properties
-                        if label:
-                            dropdown_field['hideLabel'] = False
-                        for item in data_list:
-                            data.append({
-                                "label": item,
-                                "value": item
-                            })
-                        dropdown_field['values'] = data
-                        if child == 'rows':
-                            current_component["components"].append(dropdown_field)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(dropdown_field)
+                        components_list, row_list, col_list  =self.process_radio_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<number.*>", cell_value):
-                        number_field = copy.deepcopy(self.component_json.get("number_field"))
-                        unique_key = 'number'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        number_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        number_field["properties"] = {"manual_entry": "true"}
-                        if merge_properties:
-                            number_field['properties'].update(merge_properties)
-                        # number_field["customClass"] = "w-150px"
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else ''
-                        number_field['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if label:
-                            number_field['hideLabel'] = False
-                        if child == 'rows':
-                            current_component["components"].append(number_field)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(number_field)
+                        components_list, row_list, col_list = self.process_number_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<divider.*>", cell_value):
-                        html_components = copy.deepcopy(self.component_json.get("html_compo"))
-                        html_components["content"] = f"<p style='word-break: break-word;'> </p>"
-                        if merge_properties:
-                            html_components['properties'] = merge_properties
-                        if child == 'rows':
-                            current_component["components"].append(html_components)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(html_components)
+                        components_list, row_list, col_list = self.process_divider_component(
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<sign.*>", cell_value):
-                        digital_sign = copy.deepcopy(self.component_json.get("sign"))
-                        unique_key = 'sign'
-                        if unique_key in self.unique_key_counter:
-                            unique_key_count = self.unique_key_counter[unique_key]
-                            self.unique_key_counter[unique_key] += unique_key_count
-                        else:
-                            self.unique_key_counter[unique_key] = 1
-                        digital_sign["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        _match = re.search(r'\{(.*?)\}', cell_value)
-                        label = _match.group(1) if _match else 'sign'
-                        digital_sign['label'] = f"<h6> <b>{label}</b> </h6>"
-                        if merge_properties:
-                            digital_sign['properties'] = merge_properties
-                        if label:
-                            digital_sign['hideLabel'] = True
-                            if label == 'sign':
-                                digital_sign['label'] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        if child == 'rows':
-                            current_component["components"].append(digital_sign)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(digital_sign)
+                        components_list, row_list, col_list = self.process_esign_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
 
                     elif cell_value is not None and (re.search(r"<table.*>", cell_value) or re.search(r"<customTable.*>", cell_value)):
-                        _pattern = r"<table:(.*?)>"
-                        _table_json = copy.deepcopy(self.component_json.get('table'))
-                        section_exists = re.search(r"<table:.*>", cell_value)
-                        if re.search(r"<customTable.*>", cell_value):
-                            _table_json = copy.deepcopy(self.component_json.get('customTable'))
-                            section_exists = re.search(r"<customTable:.*>", cell_value)
-                            _pattern = r"<customTable:(.*?)>"
-
-                        if section_exists:
-                            match = re.search(_pattern, cell_value)
-                            _sheet = match.group(1)
-                            __df, _wb_sheet, _ = self.convert_sheet_to_df(_sheet)
-                            _table_json, _index_list = self.process_table_json(__df, new_row, new_col, _table_json,
-                                                                               child="rows", from_parent_section=True, child_sheet=_wb_sheet)
-                        else:
-                            _table_json, _index_list = self.process_table_json(_df, new_row, new_col, _table_json, child="rows")
-                        if merge_properties:
-                            _table_json['properties'] = merge_properties
-                        if child == 'rows':
-                            current_component["components"].append(_table_json)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(_table_json)
+                        components_list, row_list, col_list, _index_list = self.process_table_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list,
+                            row=new_row,
+                            col=new_col,
+                            df=_df)
 
                     elif cell_value is not None and (re.search(r"<dataGrid.*>", cell_value)):
-                        _datagrid_json = copy.deepcopy(self.component_json.get('dataGrid'))
-                        _datagrid_json, _index_list = self.process_table_json(_df, new_row, new_col, _datagrid_json, child="dataGrid")
-                        if merge_properties:
-                            _datagrid_json['properties'] = merge_properties
-                        row_list.append(_datagrid_json)
+                        components_list, row_list, _index_list = self.process_datagrid_component(
+                            merge_properties=merge_properties,
+                            row_list=row_list,
+                            row=new_row,
+                            col=new_col,
+                            df=_df)
 
                     elif cell_value is not None and re.search(r"<columns.*>", cell_value):
-                        _pattern = r"<columns:(.*?)>"
-                        _table_json = copy.deepcopy(self.component_json.get('columns'))
-                        section_exists = re.search(r"<columns:.*>", cell_value)
-                        if section_exists:
-                            match = re.search(_pattern, cell_value)
-                            _sheet = match.group(1)
-                            __df, _wb_sheet, _ = self.convert_sheet_to_df(_sheet)
-                            _table_json, _index_list = self.process_table_json(__df, new_row, new_col, _table_json,
-                                                                               child="columns", from_parent_section=True, child_sheet=_wb_sheet)
-                        else:
-                            _table_json, _index_list = self.process_table_json(_df, new_row, new_col, _table_json, child="columns")
-                        if merge_properties:
-                            _table_json['properties'] = merge_properties
-                        if child == 'rows':
-                            current_component["components"].append(_table_json)
-                            if current_component:
-                                col_list.append(current_component)
-                        else:
-                            row_list.append(_table_json)
+                        components_list, row_list, col_list, _index_list = self.process_columns_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list,
+                            row=new_row,
+                            col=new_col,
+                            df=_df)
 
                 if child == 'rows' and col_list:
                     row_list.append(col_list)
@@ -704,12 +426,6 @@ class FormHandler:
         except Exception as table_error:
             logger.error(table_error)
 
-    @staticmethod
-    def process_component_json(df, row, col, parent_json):
-        try:
-            pass
-        except Exception as column_error:
-            logger.error(column_error)
 
     def extract_dropdown_values(self, cell_value):
         try:
@@ -721,3 +437,479 @@ class FormHandler:
             return []
         except Exception as dropdown_error:
             logger.error(dropdown_error)
+
+    def process_html_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                               merge_properties=None, child=None, current_component=None, row_list=None,
+                               col_list=None):
+        try:
+            html_components = copy.deepcopy(self.component_json.get("html_compo"))
+            content = str(cell_value).replace("<html>", "").replace('{', '').replace('}', '').strip()
+            html_components["customClass"] = "text-left"
+            html_components["content"] = f"<p style='word-break: break-word;'> {content} </p>"
+
+            if from_parent_itr:
+                if html_components:
+                    components_list.append(html_components)
+            else:
+                if merge_properties:
+                    html_components['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(html_components)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(html_components)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_header_html_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                      merge_properties=None, child=None, current_component=None,
+                                      row_list=None, col_list=None):
+        try:
+            html_components = copy.deepcopy(self.component_json.get("html_compo"))
+            html_components["customClass"] = "text-left"
+            html_components["content"] = "<h6>" + "<center>" + "<b>" + str(
+                cell_value) + "</b>" + "</center>" + "</h6>"
+
+            if from_parent_itr:
+                if html_components:
+                    components_list.append(html_components)
+            else:
+                if merge_properties:
+                    html_components['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(html_components)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(html_components)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_text_area_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                    merge_properties=None, child=None, current_component=None,
+                                    row_list=None, col_list=None):
+        try:
+            text_area = copy.deepcopy(self.component_json.get("text area"))
+            unique_key = 'textarea'
+            if re.search(r"<text_field.*>", cell_value):
+                text_area = copy.deepcopy(self.component_json.get('text_field'))
+                unique_key = 'textfield'
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            # text_area["customClass"] = "w-150px"
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else ''
+            text_area['label'] = f"<h6> <b>{label}</b> </h6>"
+            if merge_properties:
+                text_area['properties'] = merge_properties
+            if label:
+                text_area['hideLabel'] = False
+
+            if from_parent_itr:
+                if text_area:
+                    components_list.append(text_area)
+            else:
+                if child == 'rows':
+                    current_component["components"].append(text_area)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(text_area)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_panel_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                merge_properties=None, child=None, current_component=None,
+                                row_list=None, col_list=None, row=None, col=None, df=None):
+        try:
+            _panel_json = copy.deepcopy(self.component_json.get('panel'))
+
+            if from_parent_itr:
+                _panel_json, index_list = self.process_table_json(df, row, col, _panel_json,
+                                                                  child='components')
+                if _panel_json:
+                    components_list.append(_panel_json)
+            else:
+                section_exists = re.search(r"<panel:.*>", cell_value)
+                if section_exists:
+                    _pattern = r"<panel:(.*?)>"
+                    match = re.search(_pattern, cell_value)
+                    _sheet = match.group(1)
+                    __df, _wb_sheet, _ = self.convert_sheet_to_df(_sheet)
+                    _panel_json, index_list = self.process_table_json(__df, row, col, _panel_json,
+                                                                       child='components', from_parent_section=True,
+                                                                       child_sheet=_wb_sheet)
+                else:
+                    _panel_json, index_list = self.process_table_json(df, row, col, _panel_json,
+                                                                       child='components')
+                if merge_properties:
+                    _panel_json['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(_panel_json)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(_panel_json)
+
+            return components_list, row_list, col_list, index_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_date_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                               merge_properties=None, child=None, current_component=None, row_list=None,
+                               col_list=None):
+        try:
+            date_filed = copy.deepcopy(self.component_json.get("date_time_picker"))
+            unique_key = 'date'
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else ''
+            date_filed['label'] = f"<h6> <b>{label}</b> </h6>"
+            if label:
+                date_filed['hideLabel'] = False
+            date_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            if from_parent_itr:
+                if date_filed:
+                    components_list.append(date_filed)
+            else:
+                if merge_properties:
+                    date_filed['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(date_filed)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(date_filed)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_time_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                               merge_properties=None, child=None, current_component=None, row_list=None,
+                               col_list=None):
+        try:
+            time_filed = copy.deepcopy(self.component_json.get("time"))
+            unique_key = 'time'
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            time_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else ''
+            time_filed['label'] = f"<h6> <b>{label}</b> </h6>"
+            if merge_properties:
+                time_filed['properties'] = merge_properties
+            if label:
+                time_filed['hideLabel'] = False
+            time_filed["properties"] = {"manual_entry": "true"}
+
+            if from_parent_itr:
+                if time_filed:
+                    components_list.append(time_filed)
+            else:
+                if child == 'rows':
+                    current_component["components"].append(time_filed)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(time_filed)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_dropdown_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                   merge_properties=None, child=None, current_component=None,
+                                   row_list=None, col_list=None):
+        try:
+            data = []
+            dropdown_field = copy.deepcopy(self.component_json.get("drop_down_field"))
+            data_list = self.extract_dropdown_values(cell_value)
+            unique_key = 'select'
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else ''
+            dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
+            if merge_properties:
+                dropdown_field['properties'] = merge_properties
+            if label:
+                dropdown_field['hideLabel'] = False
+            for item in data_list:
+                data.append({
+                    "label": item,
+                    "value": item
+                })
+            dropdown_field.get('data')['values'] = data
+
+            if from_parent_itr:
+                if dropdown_field:
+                    components_list.append(dropdown_field)
+            else:
+                if child == 'rows':
+                    current_component["components"].append(dropdown_field)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(dropdown_field)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_radio_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                merge_properties=None, child=None, current_component=None, row_list=None,
+                                col_list=None):
+        try:
+            data = []
+            dropdown_field = copy.deepcopy(self.component_json.get("radio_button"))
+            data_list = self.extract_dropdown_values(cell_value)
+            unique_key = 'radio'
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else ''
+            dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
+            if merge_properties:
+                dropdown_field['properties'] = merge_properties
+            if label:
+                dropdown_field['hideLabel'] = False
+            for item in data_list:
+                data.append({
+                    "label": item,
+                    "value": item
+                })
+            dropdown_field['values'] = data
+
+            if from_parent_itr:
+                if dropdown_field:
+                    components_list.append(dropdown_field)
+            else:
+                if child == 'rows':
+                    current_component["components"].append(dropdown_field)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(dropdown_field)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_number_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                 merge_properties=None, child=None, current_component=None, row_list=None,
+                                 col_list=None):
+        try:
+            number_field = copy.deepcopy(self.component_json.get("number_field"))
+            unique_key = 'number'
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            number_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            number_field["properties"] = {"manual_entry": "true"}
+            if merge_properties:
+                number_field['properties'].update(merge_properties)
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else ''
+            number_field['label'] = f"<h6> <b>{label}</b> </h6>"
+            if label:
+                number_field['hideLabel'] = False
+
+            if from_parent_itr:
+                if number_field:
+                    components_list.append(number_field)
+            else:
+                if child == 'rows':
+                    current_component["components"].append(number_field)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(number_field)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_divider_component(self, from_parent_itr=False, components_list=None,
+                                  merge_properties=None, child=None, current_component=None,
+                                  row_list=None, col_list=None):
+        try:
+            html_components = copy.deepcopy(self.component_json.get("html_compo"))
+            html_components["content"] = f"<p style='word-break: break-word;'> </p>"
+
+            if from_parent_itr:
+                if html_components:
+                    components_list.append(html_components)
+            else:
+                if merge_properties:
+                    html_components['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(html_components)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(html_components)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_esign_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                merge_properties=None, child=None, current_component=None, row_list=None,
+                                col_list=None):
+        try:
+            digital_sign = copy.deepcopy(self.component_json.get("sign"))
+            unique_key = 'sign'
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            digital_sign["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else 'sign'
+            digital_sign['label'] = f"<h6> <b>{label}</b> </h6>"
+            if merge_properties:
+                digital_sign['properties'] = merge_properties
+            if label:
+                digital_sign['hideLabel'] = True
+                if label == 'sign':
+                    digital_sign['label'] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            if from_parent_itr:
+                if digital_sign:
+                    components_list.append(digital_sign)
+            else:
+                if child == 'rows':
+                    current_component["components"].append(digital_sign)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(digital_sign)
+
+            return components_list, row_list, col_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_table_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                merge_properties=None, child=None, current_component=None, row_list=None,
+                                col_list=None, row=None, col=None, df=None):
+        try:
+            _pattern = r"<table:(.*?)>"
+            _table_json = copy.deepcopy(self.component_json.get('table'))
+            section_exists = re.search(r"<table:.*>", cell_value)
+            if re.search(r"<customTable.*>", cell_value):
+                _table_json = copy.deepcopy(self.component_json.get('customTable'))
+                section_exists = re.search(r"<customTable:.*>", cell_value)
+                _pattern = r"<customTable:(.*?)>"
+
+            if from_parent_itr:
+                _table_json, _index_list = self.process_table_json(df, row, col, _table_json,
+                                                                 child="rows")
+                if _table_json:
+                    components_list.append(_table_json)
+            else:
+                if section_exists:
+                    match = re.search(_pattern, cell_value)
+                    _sheet = match.group(1)
+                    __df, _wb_sheet, _ = self.convert_sheet_to_df(_sheet)
+                    _table_json, _index_list = self.process_table_json(__df, row, col, _table_json,
+                                                                       child="rows", from_parent_section=True,
+                                                                       child_sheet=_wb_sheet)
+                else:
+                    _table_json, _index_list = self.process_table_json(df, row, col, _table_json, child="rows")
+                if merge_properties:
+                    _table_json['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(_table_json)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(_table_json)
+
+            return components_list, row_list, col_list, _index_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_datagrid_component(self, from_parent_itr=False, components_list=None,
+                                   merge_properties=None, row_list=None, row=None, col=None, df=None):
+        try:
+            datagrid_json = copy.deepcopy(self.component_json.get('dataGrid'))
+            datagrid_json, index_list = self.process_table_json(df, row, col, datagrid_json, child="dataGrid")
+
+            if from_parent_itr:
+                if datagrid_json:
+                    components_list.append(datagrid_json)
+            else:
+                if merge_properties:
+                    datagrid_json['properties'] = merge_properties
+                row_list.append(datagrid_json)
+
+            return components_list, row_list, index_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+    def process_columns_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                                  merge_properties=None, child=None, current_component=None,
+                                  row_list=None, col_list=None, row=None, col=None, df=None):
+        try:
+            _pattern = r"<columns:(.*?)>"
+            _table_json = copy.deepcopy(self.component_json.get('columns'))
+            section_exists = re.search(r"<columns:.*>", cell_value)
+
+            if from_parent_itr:
+                _table_json, _index_list = self.process_table_json(df, row, col, _table_json, child="columns")
+                if _table_json:
+                    components_list.append(_table_json)
+            else:
+                if section_exists:
+                    match = re.search(_pattern, cell_value)
+                    _sheet = match.group(1)
+                    __df, _wb_sheet, _ = self.convert_sheet_to_df(_sheet)
+                    _table_json, _index_list = self.process_table_json(__df, row, col, _table_json,
+                                                                       child="columns", from_parent_section=True,
+                                                                       child_sheet=_wb_sheet)
+                else:
+                    _table_json, _index_list = self.process_table_json(df, row, col, _table_json,
+                                                                       child="columns")
+                if merge_properties:
+                    _table_json['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(_table_json)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(_table_json)
+
+            return components_list, row_list, col_list, _index_list
+        except Exception as row_error:
+            logger.error(row_error)
