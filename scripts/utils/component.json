@@ -23,9 +23,6 @@
     "applyMaskOn": "change",
     "customClass": "text-center",
     "tableView": true,
-    "attributes": {
-      "style": "text-align:center"
-    },
     "hideLabel": true,
     "key": "textField",
     "type": "textfield",

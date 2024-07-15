@@ -57,9 +57,13 @@ class FormHandler:
                         if html_components:
                             components_list.append(html_components)
 
-                    elif cell_value is not None and re.search(r"<text_area.*>", cell_value):
+                    elif cell_value is not None and (re.search(r"<text_area.*>", cell_value) or re.search(r"<text_field.*>", cell_value)):
                         text_area = copy.deepcopy(self.component_json.get("text area"))
                         unique_key = 'textarea'
+                        if re.search(r"<text_field.*>", cell_value):
+                            text_area = copy.deepcopy(self.component_json.get('text_field'))
+                            unique_key = 'textfield'
+
                         if unique_key in self.unique_key_counter:
                             unique_key_count = self.unique_key_counter[unique_key]
                             self.unique_key_counter[unique_key] += unique_key_count
@@ -472,9 +476,13 @@ class FormHandler:
                         else:
                             row_list.append(time_filed)
 
-                    elif cell_value is not None and re.search(r"<text_area.*>", cell_value):
+                    elif cell_value is not None and (
+                            re.search(r"<text_area.*>", cell_value) or re.search(r"<text_field.*>", cell_value)):
                         text_area = copy.deepcopy(self.component_json.get("text area"))
                         unique_key = 'textarea'
+                        if re.search(r"<text_field.*>", cell_value):
+                            text_area = copy.deepcopy(self.component_json.get('text_field'))
+                            unique_key = 'textfield'
                         if unique_key in self.unique_key_counter:
                             unique_key_count = self.unique_key_counter[unique_key]
                             self.unique_key_counter[unique_key] += unique_key_count
