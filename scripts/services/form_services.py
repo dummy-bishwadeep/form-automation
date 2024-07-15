@@ -1,7 +1,5 @@
 import os
 import time
-from typing import Optional
-
 from fastapi import APIRouter, UploadFile, File, Form
 from starlette.responses import FileResponse
 from scripts.config.description import Description

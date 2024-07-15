@@ -1,7 +1,6 @@
 import copy
 import json
 import re
-import time
 import numpy as np
 import openpyxl
 import pandas as pd
@@ -30,13 +29,18 @@ class FormHandler:
 
             # iterating through each rows and columns from the initial worksheet
             for row in range(0, table_no_rows):
+                # skip rows when component section are already iterated
                 if row in {tup[0] for tup in index_list}:
                     continue
                 for col in range(0, table_num_cols):
+                    # skip columns when component section are already iterated
                     if (row, col) in index_list:
                         continue
 
+                    # fetch cell value
                     cell_value = arr[row][col]
+
+                    # generate component data based on its types
                     if cell_value is not None and re.search(r"<html.*>", cell_value):
                         components_list, _, _ = self.process_html_component(
                             from_parent_itr=True,
@@ -442,6 +446,7 @@ class FormHandler:
                                merge_properties=None, child=None, current_component=None, row_list=None,
                                col_list=None):
         try:
+            # fetch static html component json
             html_components = copy.deepcopy(self.component_json.get("html_compo"))
             content = str(cell_value).replace("<html>", "").replace('{', '').replace('}', '').strip()
             html_components["customClass"] = "text-left"
@@ -451,8 +456,10 @@ class FormHandler:
                 if html_components:
                     components_list.append(html_components)
             else:
+                # if any rows/columns are merged
                 if merge_properties:
                     html_components['properties'] = merge_properties
+
                 if child == 'rows':
                     current_component["components"].append(html_components)
                     if current_component:
@@ -505,7 +512,6 @@ class FormHandler:
             else:
                 self.unique_key_counter[unique_key] = 1
             text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-            # text_area["customClass"] = "w-150px"
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else ''
             text_area['label'] = f"<h6> <b>{label}</b> </h6>"
