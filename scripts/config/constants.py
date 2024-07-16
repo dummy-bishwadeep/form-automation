@@ -92,3 +92,11 @@ class Logics:
         "input": False,
         "tableView": False
     }
+
+class FormConstants:
+    rows = 'rows'
+    columns = 'columns'
+    html_element = 'html_element'
+    html = 'html'
+    text_field = 'text_field'
+    number_field = 'number_field'

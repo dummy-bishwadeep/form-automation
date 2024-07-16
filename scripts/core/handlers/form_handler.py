@@ -54,25 +54,6 @@ class FormHandler:
                             components_list=components_list)
 
                     elif cell_value is not None and (re.search(r"<text_area.*>", cell_value) or re.search(r"<text_field.*>", cell_value)):
-                        # text_area = copy.deepcopy(self.component_json.get("text area"))
-                        # unique_key = 'textarea'
-                        # if re.search(r"<text_field.*>", cell_value):
-                        #     text_area = copy.deepcopy(self.component_json.get('text_field'))
-                        #     unique_key = 'textfield'
-                        #
-                        # if unique_key in self.unique_key_counter:
-                        #     unique_key_count = self.unique_key_counter[unique_key]
-                        #     self.unique_key_counter[unique_key] += unique_key_count
-                        # else:
-                        #     self.unique_key_counter[unique_key] = 1
-                        # text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
-                        # _match = re.search(r'\{(.*?)\}', cell_value)
-                        # label = _match.group(1) if _match else ''
-                        # text_area['label'] = f"<h6> <b>{label}</b> </h6>"
-                        # if label:
-                        #     text_area['hideLabel'] = False
-                        # if text_area:
-                        #     components_list.append(text_area)
                         components_list, _, _ = self.process_text_area_component(
                             from_parent_itr=True,
                             cell_value=cell_value,
@@ -252,8 +233,6 @@ class FormHandler:
                     for merge_index in merge:
                         row_range_start = merge_index["Row Range start"] - 1
                         col_range_start = merge_index["Column Range start"] - 1
-                        # row_range_end = merge_index["Row Range end"] - 1
-                        # col_range_end = merge_index["Column Range end"] - 1
                         span = merge_index['span']
                         if new_row == row_range_start and new_col == col_range_start:
                             if span == 'rowSpan':
@@ -266,9 +245,6 @@ class FormHandler:
                                 merge_properties = {
                                     'colSpan': colspan_value
                                 }
-                            # elif span == 'rowCol':
-                            #     colspan_value = i["Column Range end"] - i["Column Range start"] + 1
-                            #     rowspan_value = i["Row Range end"] - i["Row Range start"] + 1
                             for merge_row_index in range(merge_index["Row Range start"], merge_index["Row Range end"]-1):
                                 for merge_col_index in range(merge_index["Column Range start"], merge_index["Column Range end"]-1):
                                     _index_list.append((merge_row_index, merge_col_index))
@@ -344,7 +320,7 @@ class FormHandler:
                             col_list=col_list)
 
                     elif cell_value is not None and re.search(r"<radio.*>", cell_value):
-                        components_list, row_list, col_list  =self.process_radio_component(
+                        _, row_list, col_list  =self.process_radio_component(
                             cell_value=cell_value,
                             merge_properties=merge_properties,
                             child=child,
@@ -452,6 +428,9 @@ class FormHandler:
             html_components["customClass"] = "text-left"
             html_components["content"] = f"<p style='word-break: break-word;'> {content} </p>"
 
+            unique_key_id = self.generate_unique_id(comp_type='html')
+            html_components['key'] = unique_key_id
+
             if from_parent_itr:
                 if html_components:
                     components_list.append(html_components)
@@ -480,6 +459,9 @@ class FormHandler:
             html_components["content"] = "<h6>" + "<center>" + "<b>" + str(
                 cell_value) + "</b>" + "</center>" + "</h6>"
 
+            unique_key_id = self.generate_unique_id(comp_type='html')
+            html_components['key'] = unique_key_id
+
             if from_parent_itr:
                 if html_components:
                     components_list.append(html_components)
@@ -506,12 +488,10 @@ class FormHandler:
             if re.search(r"<text_field.*>", cell_value):
                 text_area = copy.deepcopy(self.component_json.get('text_field'))
                 unique_key = 'textfield'
-            if unique_key in self.unique_key_counter:
-                unique_key_count = self.unique_key_counter[unique_key]
-                self.unique_key_counter[unique_key] += unique_key_count
-            else:
-                self.unique_key_counter[unique_key] = 1
-            text_area["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            unique_key_id = self.generate_unique_id(comp_type=unique_key)
+            text_area["key"] = unique_key_id
+
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else ''
             text_area['label'] = f"<h6> <b>{label}</b> </h6>"
@@ -540,6 +520,9 @@ class FormHandler:
                                 row_list=None, col_list=None, row=None, col=None, df=None):
         try:
             _panel_json = copy.deepcopy(self.component_json.get('panel'))
+
+            unique_key_id = self.generate_unique_id(comp_type='panel')
+            _panel_json['key'] = unique_key_id
 
             if from_parent_itr:
                 _panel_json, index_list = self.process_table_json(df, row, col, _panel_json,
@@ -577,18 +560,16 @@ class FormHandler:
                                col_list=None):
         try:
             date_filed = copy.deepcopy(self.component_json.get("date_time_picker"))
-            unique_key = 'date'
-            if unique_key in self.unique_key_counter:
-                unique_key_count = self.unique_key_counter[unique_key]
-                self.unique_key_counter[unique_key] += unique_key_count
-            else:
-                self.unique_key_counter[unique_key] = 1
+
+            unique_key_id = self.generate_unique_id(comp_type='date')
+            date_filed["key"] = unique_key_id
+
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else ''
             date_filed['label'] = f"<h6> <b>{label}</b> </h6>"
             if label:
                 date_filed['hideLabel'] = False
-            date_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            # date_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
 
             if from_parent_itr:
                 if date_filed:
@@ -612,13 +593,11 @@ class FormHandler:
                                col_list=None):
         try:
             time_filed = copy.deepcopy(self.component_json.get("time"))
-            unique_key = 'time'
-            if unique_key in self.unique_key_counter:
-                unique_key_count = self.unique_key_counter[unique_key]
-                self.unique_key_counter[unique_key] += unique_key_count
-            else:
-                self.unique_key_counter[unique_key] = 1
-            time_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            unique_key_id = self.generate_unique_id(comp_type='time')
+            time_filed["key"] = unique_key_id
+
+            # time_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else ''
             time_filed['label'] = f"<h6> <b>{label}</b> </h6>"
@@ -650,13 +629,10 @@ class FormHandler:
             data = []
             dropdown_field = copy.deepcopy(self.component_json.get("drop_down_field"))
             data_list = self.extract_dropdown_values(cell_value)
-            unique_key = 'select'
-            if unique_key in self.unique_key_counter:
-                unique_key_count = self.unique_key_counter[unique_key]
-                self.unique_key_counter[unique_key] += unique_key_count
-            else:
-                self.unique_key_counter[unique_key] = 1
-            dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            unique_key_id = self.generate_unique_id(comp_type='time')
+            dropdown_field['key'] = unique_key_id
+
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else ''
             dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
@@ -693,13 +669,10 @@ class FormHandler:
             data = []
             dropdown_field = copy.deepcopy(self.component_json.get("radio_button"))
             data_list = self.extract_dropdown_values(cell_value)
-            unique_key = 'radio'
-            if unique_key in self.unique_key_counter:
-                unique_key_count = self.unique_key_counter[unique_key]
-                self.unique_key_counter[unique_key] += unique_key_count
-            else:
-                self.unique_key_counter[unique_key] = 1
-            dropdown_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            unique_key_id = self.generate_unique_id(comp_type='radio')
+            dropdown_field['key'] = unique_key_id
+
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else ''
             dropdown_field['label'] = f"<h6> <b>{label}</b> </h6>"
@@ -734,13 +707,10 @@ class FormHandler:
                                  col_list=None):
         try:
             number_field = copy.deepcopy(self.component_json.get("number_field"))
-            unique_key = 'number'
-            if unique_key in self.unique_key_counter:
-                unique_key_count = self.unique_key_counter[unique_key]
-                self.unique_key_counter[unique_key] += unique_key_count
-            else:
-                self.unique_key_counter[unique_key] = 1
-            number_field["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            unique_key_id = self.generate_unique_id(comp_type='number')
+            number_field['key'] = unique_key_id
+
             number_field["properties"] = {"manual_entry": "true"}
             if merge_properties:
                 number_field['properties'].update(merge_properties)
@@ -772,6 +742,9 @@ class FormHandler:
             html_components = copy.deepcopy(self.component_json.get("html_compo"))
             html_components["content"] = f"<p style='word-break: break-word;'> </p>"
 
+            unique_key_id = self.generate_unique_id(comp_type='html')
+            html_components['key'] = unique_key_id
+
             if from_parent_itr:
                 if html_components:
                     components_list.append(html_components)
@@ -794,22 +767,23 @@ class FormHandler:
                                 col_list=None):
         try:
             digital_sign = copy.deepcopy(self.component_json.get("sign"))
-            unique_key = 'sign'
-            if unique_key in self.unique_key_counter:
-                unique_key_count = self.unique_key_counter[unique_key]
-                self.unique_key_counter[unique_key] += unique_key_count
-            else:
-                self.unique_key_counter[unique_key] = 1
-            digital_sign["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+
+            unique_key_id = self.generate_unique_id(comp_type='sign')
+            digital_sign["key"] = unique_key_id
+
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else 'sign'
             digital_sign['label'] = f"<h6> <b>{label}</b> </h6>"
+            signature_properties = {
+                "signature_keys": unique_key_id
+            }
+            digital_sign['properties'] = signature_properties
             if merge_properties:
-                digital_sign['properties'] = merge_properties
+                digital_sign['properties'].update(merge_properties)
             if label:
                 digital_sign['hideLabel'] = True
                 if label == 'sign':
-                    digital_sign['label'] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+                    digital_sign['label'] = unique_key_id
 
             if from_parent_itr:
                 if digital_sign:
@@ -833,10 +807,15 @@ class FormHandler:
             _pattern = r"<table:(.*?)>"
             _table_json = copy.deepcopy(self.component_json.get('table'))
             section_exists = re.search(r"<table:.*>", cell_value)
+            unique_key = 'table'
             if re.search(r"<customTable.*>", cell_value):
                 _table_json = copy.deepcopy(self.component_json.get('customTable'))
                 section_exists = re.search(r"<customTable:.*>", cell_value)
                 _pattern = r"<customTable:(.*?)>"
+                unique_key = 'customTable'
+
+            unique_key_id = self.generate_unique_id(comp_type=unique_key)
+            _table_json['key'] = unique_key_id
 
             if from_parent_itr:
                 _table_json, _index_list = self.process_table_json(df, row, col, _table_json,
@@ -870,6 +849,10 @@ class FormHandler:
                                    merge_properties=None, row_list=None, row=None, col=None, df=None):
         try:
             datagrid_json = copy.deepcopy(self.component_json.get('dataGrid'))
+
+            unique_key_id = self.generate_unique_id(comp_type='dateGrid')
+            datagrid_json['key'] = unique_key_id
+
             datagrid_json, index_list = self.process_table_json(df, row, col, datagrid_json, child="dataGrid")
 
             if from_parent_itr:
@@ -891,6 +874,9 @@ class FormHandler:
             _pattern = r"<columns:(.*?)>"
             _table_json = copy.deepcopy(self.component_json.get('columns'))
             section_exists = re.search(r"<columns:.*>", cell_value)
+
+            unique_key_id = self.generate_unique_id(comp_type='columns')
+            _table_json['key'] = unique_key_id
 
             if from_parent_itr:
                 _table_json, _index_list = self.process_table_json(df, row, col, _table_json, child="columns")
@@ -919,3 +905,16 @@ class FormHandler:
             return components_list, row_list, col_list, _index_list
         except Exception as row_error:
             logger.error(row_error)
+
+    def generate_unique_id(self, comp_type):
+        try:
+            unique_key = copy.deepcopy(comp_type)
+            if unique_key in self.unique_key_counter:
+                unique_key_count = self.unique_key_counter[unique_key]
+                self.unique_key_counter[unique_key] += unique_key_count
+            else:
+                self.unique_key_counter[unique_key] = 1
+            unique_key_id = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            return unique_key_id
+        except Exception as id_error:
+            logger.error(id_error)
