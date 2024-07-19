@@ -1,15 +1,25 @@
 import copy
 import json
 import re
+import httpx
+import requests
 import numpy as np
 import openpyxl
 import pandas as pd
+from fastapi import HTTPException, status
+from scripts.constants import EnvironmentConstants
+from scripts.constants.api_constants import UTCoreStepsAPI
+from scripts.constants.app_constants import Secrets, AutomationConstants
+from scripts.constants.step_constants import StepConstants
 from scripts.logging.logger import logger
 from scripts.utils.logbook_utils import LogbookUtils
+from scripts.utils.security_utils.jwt_util import JWT
 
 
 class FormHandler:
-    def __init__(self, file_path, sheet_name, current_ts):
+    def __init__(self, login_token, encrypt_payload, file_path, sheet_name, current_ts, step_data):
+        self.login_token = login_token
+        self.encrypt_payload = encrypt_payload
         self.file_path = file_path
         self.sheet_name = sheet_name
         with open("scripts/utils/component.json", 'r') as file:
@@ -17,9 +27,16 @@ class FormHandler:
         self.workbook = openpyxl.load_workbook(self.file_path, data_only=True)
         self.unique_key_counter = {}
         self.current_ts = current_ts
+        self.date_keys = []
+        self.field_props = {}
+        self.step_data = step_data
+        self.property_names = []
+
 
     def generate_form_json(self):
         try:
+            _, step_data = self.check_step_exists()
+
             # convert excel data into dataframe
             df, _, _ = self.convert_sheet_to_df(self.sheet_name)
             table_no_rows, table_num_cols = df.shape
@@ -141,6 +158,9 @@ class FormHandler:
                 json.dump({"components": components_list}, json_file, indent=4)
             print(f"JSON {file_name} created")
             logger.info(f"{file_name} -> JSON created successfully!!!!!!!!!!!!")
+
+            # update step data to mongo db
+            self.update_step_data(step_data, {"components": components_list})
             return True
 
         except Exception as e:
@@ -446,6 +466,7 @@ class FormHandler:
                 else:
                     row_list.append(html_components)
 
+            self.update_field_props(api_key=unique_key_id, comp_data=html_components)
             return components_list, row_list, col_list
         except Exception as row_error:
             logger.error(row_error)
@@ -474,6 +495,8 @@ class FormHandler:
                         col_list.append(current_component)
                 else:
                     row_list.append(html_components)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=html_components)
 
             return components_list, row_list, col_list
         except Exception as row_error:
@@ -510,6 +533,8 @@ class FormHandler:
                         col_list.append(current_component)
                 else:
                     row_list.append(text_area)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=text_area)
 
             return components_list, row_list, col_list
         except Exception as row_error:
@@ -551,6 +576,8 @@ class FormHandler:
                 else:
                     row_list.append(_panel_json)
 
+            self.update_field_props(api_key=unique_key_id, comp_data=_panel_json)
+
             return components_list, row_list, col_list, index_list
         except Exception as row_error:
             logger.error(row_error)
@@ -569,7 +596,7 @@ class FormHandler:
             date_filed['label'] = f"<h6> <b>{label}</b> </h6>"
             if label:
                 date_filed['hideLabel'] = False
-            # date_filed["key"] = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            self.date_keys.append(unique_key_id)
 
             if from_parent_itr:
                 if date_filed:
@@ -583,6 +610,8 @@ class FormHandler:
                         col_list.append(current_component)
                 else:
                     row_list.append(date_filed)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=date_filed)
 
             return components_list, row_list, col_list
         except Exception as row_error:
@@ -617,6 +646,8 @@ class FormHandler:
                         col_list.append(current_component)
                 else:
                     row_list.append(time_filed)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=time_filed)
 
             return components_list, row_list, col_list
         except Exception as row_error:
@@ -658,6 +689,8 @@ class FormHandler:
                 else:
                     row_list.append(dropdown_field)
 
+            self.update_field_props(api_key=unique_key_id, comp_data=dropdown_field)
+
             return components_list, row_list, col_list
         except Exception as row_error:
             logger.error(row_error)
@@ -698,6 +731,8 @@ class FormHandler:
                 else:
                     row_list.append(dropdown_field)
 
+            self.update_field_props(api_key=unique_key_id, comp_data=dropdown_field)
+
             return components_list, row_list, col_list
         except Exception as row_error:
             logger.error(row_error)
@@ -731,6 +766,8 @@ class FormHandler:
                 else:
                     row_list.append(number_field)
 
+            self.update_field_props(api_key=unique_key_id, comp_data=number_field)
+
             return components_list, row_list, col_list
         except Exception as row_error:
             logger.error(row_error)
@@ -757,6 +794,8 @@ class FormHandler:
                         col_list.append(current_component)
                 else:
                     row_list.append(html_components)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=html_components)
 
             return components_list, row_list, col_list
         except Exception as row_error:
@@ -795,6 +834,8 @@ class FormHandler:
                         col_list.append(current_component)
                 else:
                     row_list.append(digital_sign)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=digital_sign)
 
             return components_list, row_list, col_list
         except Exception as row_error:
@@ -841,6 +882,8 @@ class FormHandler:
                 else:
                     row_list.append(_table_json)
 
+            self.update_field_props(api_key=unique_key_id, comp_data=_table_json)
+
             return components_list, row_list, col_list, _index_list
         except Exception as row_error:
             logger.error(row_error)
@@ -862,6 +905,8 @@ class FormHandler:
                 if merge_properties:
                     datagrid_json['properties'] = merge_properties
                 row_list.append(datagrid_json)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=datagrid_json)
 
             return components_list, row_list, index_list
         except Exception as row_error:
@@ -902,6 +947,8 @@ class FormHandler:
                 else:
                     row_list.append(_table_json)
 
+            self.update_field_props(api_key=unique_key_id, comp_data=_table_json)
+
             return components_list, row_list, col_list, _index_list
         except Exception as row_error:
             logger.error(row_error)
@@ -915,6 +962,140 @@ class FormHandler:
             else:
                 self.unique_key_counter[unique_key] = 1
             unique_key_id = f'{unique_key}_{self.unique_key_counter[unique_key]}'
+            self.property_names.append(unique_key_id)
             return unique_key_id
         except Exception as id_error:
             logger.error(id_error)
+
+    def update_field_props(self, api_key, comp_data):
+        try:
+            if comp_data:
+                comp_properties = comp_data.get('properties', {})
+                other_properties = {
+                    "otherProperties": {
+                        "type": comp_data.get('type', ''),
+                        "disabled": False
+                    }
+                }
+                comp_properties.update(other_properties)
+                if comp_properties:
+                    self.field_props.update({api_key: comp_properties})
+        except Exception as field_props_error:
+            logger.error(field_props_error)
+            raise field_props_error
+
+    def check_step_exists(self):
+        try:
+            # prepare payload
+            payload = copy.deepcopy(StepConstants.fetch_step_data_payload)
+            filter_data = copy.deepcopy(StepConstants.fetch_step_data_filter_model)
+            filter_data['step_name']['filter'] = self.step_data.get('step_name', '').strip()
+            filter_data['display_title']['filter'] = self.step_data.get('display_title', '').strip()
+            payload['filters']['filterModel'] = filter_data
+
+            # trigger fetch step data api
+            url = f'{EnvironmentConstants.base_path}{UTCoreStepsAPI.fetch_step}'
+
+            # encode payload int jwt
+            if self.encrypt_payload:
+                payload = JWT().encode(payload=payload)
+                response = requests.post(url, data=payload, headers=Secrets.headers, cookies=self.login_token)
+            else:
+                response = requests.post(url, json=payload, headers=Secrets.headers, cookies=self.login_token)
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Failed to fetch step details')
+            response = response.json()
+
+            # extract step data
+            step_data = response.get('data', {}).get('bodyContent', [])
+            if step_data:
+                return True, step_data[0]
+            return False, {}
+        except Exception as step_error:
+            logger.error(step_error)
+            raise step_error
+
+    def update_step_data(self, step_data, form_data):
+        try:
+            step_valid = self.validate_step(step_data, form_data)
+
+            if step_valid:
+                payload = {
+                    "dateKeys": self.date_keys,
+                    "project_id": EnvironmentConstants.project_id,
+                    "step_id": step_data.get('step_id', ''),
+                    "step_name": self.step_data.get('step_name', '').strip(),
+                    "description": self.step_data.get('description', '').strip(),
+                    "display_title": self.step_data.get('display_title', '').strip(),
+                    "menu_placement": self.step_data.get('menu_placement', '').strip(),
+                    "step_category": self.step_data.get('step_category', '').strip(),
+                    "step_sub_category": self.step_data.get('step_sub_category', None),
+                    'replicate_type': None,
+                    "form_factor": ["mobile", "tablet", "web"],
+                    'validate_form': step_data.get('validate_form', False),
+                    "data": form_data,
+                    "field_props": self.field_props,
+                    'auto_save': step_data.get('auto_save', False),
+                    'job_id': None,
+                    'schedule_id': None,
+                    "step_version": 1,
+                    "project_type": AutomationConstants.project_type,
+                    "tz": EnvironmentConstants.tz,
+                    "language": AutomationConstants.language
+                }
+
+                # trigger step validation api
+                url = f'{EnvironmentConstants.base_path}{UTCoreStepsAPI.create_step}'
+
+                # encode payload int jwt
+                if self.encrypt_payload:
+                    payload = JWT().encode(payload=payload)
+                    response = requests.post(url, data=payload, headers=Secrets.headers, cookies=self.login_token)
+                else:
+                    response = requests.post(url, json=payload, headers=Secrets.headers, cookies=self.login_token)
+
+                if response.status_code != 200:
+                    raise HTTPException(status_code=response.status_code, detail='Failed to save step')
+                response = response.json()
+                return response
+            raise HTTPException(status_code=status.HTTP_200_OK, detail='Failed to validate step')
+        except Exception as step_update_error:
+            logger.error(step_update_error)
+            raise step_update_error
+
+    def validate_step(self, step_data, form_data):
+        try:
+            payload = {
+                "dateKeys": self.date_keys,
+                "project_id": EnvironmentConstants.project_id,
+                "step_id": step_data.get('step_id', ''),
+                "data": form_data,
+                "field_props": self.field_props,
+                "property_names": self.property_names,
+                "step_category": self.step_data.get('step_category', '').strip(),
+                "project_type": AutomationConstants.project_type,
+                "tz": EnvironmentConstants.tz,
+                "language": AutomationConstants.language,
+                'replicate_type': None
+            }
+
+            # trigger step validation api
+            url = f'{EnvironmentConstants.base_path}{UTCoreStepsAPI.validate_step}'
+
+            # encode payload int jwt
+            if self.encrypt_payload:
+                payload = JWT().encode(payload=payload)
+                response = requests.post(url, data=payload, headers=Secrets.headers, cookies=self.login_token)
+            else:
+                response = requests.post(url, json=payload, headers=Secrets.headers, cookies=self.login_token)
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail='Failed to validate step')
+            response = response.json()
+            if response.get('message', '').lower() != 'validation successful' or response.get('data'):
+                raise HTTPException(status_code=status.HTTP_200_OK, detail='Failed to validate step')
+            return True
+        except Exception as validate_error:
+            logger.error(validate_error)
+            raise validate_error
