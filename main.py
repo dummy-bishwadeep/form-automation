@@ -1,12 +1,15 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 
 from scripts import services
 from scripts.config import Services
 from scripts.logging.logger import logger
+from scripts.utils.security import verify_cookie
 
-app = FastAPI()
+app = FastAPI(dependencies=[Depends(verify_cookie)])
 app.include_router(services.router)
+
+
 # starting the application
 if __name__ == "__main__":
     try:
