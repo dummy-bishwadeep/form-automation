@@ -31,5 +31,8 @@ class StepConstants:
             "filterType": "text",
             "type": "contains",
             "filter": ""
-        }
+        },
+        "step_category": {
+            "values": []
+        },
     }

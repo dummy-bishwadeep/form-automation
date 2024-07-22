@@ -1062,6 +1062,7 @@ class FormHandler:
             filter_data = copy.deepcopy(StepConstants.fetch_step_data_filter_model)
             filter_data['step_name']['filter'] = self.step_data.get('step_name', '').strip()
             filter_data['display_title']['filter'] = self.step_data.get('display_title', '').strip()
+            filter_data['step_category']['values'] = [self.step_data.get('step_category', '').strip()] if self.step_data.get('step_category', '').strip() else []
             payload['filters']['filterModel'] = filter_data
 
             # trigger fetch step data api
