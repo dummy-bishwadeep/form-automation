@@ -11,6 +11,7 @@ from scripts.constants import EnvironmentConstants
 from scripts.constants.api_constants import UTCoreStepsAPI
 from scripts.constants.app_constants import Secrets, AutomationConstants
 from scripts.constants.step_constants import StepConstants
+from scripts.core.handlers.workflow_handler import WorkflowHandler
 from scripts.logging.logger import logger
 from scripts.utils.logbook_utils import LogbookUtils
 from scripts.utils.security_utils.jwt_util import JWT
@@ -170,6 +171,12 @@ class FormHandler:
 
             # update step data to mongo db
             response = self.update_step_data(step_data, {"components": components_list})
+
+            # automate workflow
+            workflow_obj = WorkflowHandler(workbook=self.workbook,
+                                           encrypt_payload=self.encrypt_payload,
+                                           login_token=self.login_token)
+            response = workflow_obj.automate_workflow()
             return response
 
         except Exception as e:

@@ -3,6 +3,7 @@ class AppConstants:
     project_type = 'project_type'
     tz = 'tz'
     langauge = 'language'
+    metadata_sheet = 'Metadata'
 
 class AutomationConstants:
     tz = 'Asia/Kolkata'

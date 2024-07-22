@@ -2,16 +2,16 @@ from scripts.constants import EnvironmentConstants
 from scripts.constants.app_constants import AutomationConstants
 
 
-class StepConstants:
-    fetch_step_data_payload = {
+class WorkflowConstants:
+    fetch_workflow_data_payload = {
         "startRow": 0,
         "endRow": 100,
         "page": 1,
         "records": 100,
         "filters": {
-            "sortModel": [],
-            "filterModel": {}
-          },
+          "sortModel": [],
+          "filterModel": {}
+        },
         "global_filters": {},
         "metaData": {},
         "tag_fetch_type": "",
@@ -19,20 +19,23 @@ class StepConstants:
         "project_type": AutomationConstants.project_type,
         "tz": EnvironmentConstants.tz,
         "language": AutomationConstants.language
+      }
+
+    fetch_workflow_filter_model = {
+        "workflow_name": {
+            "filterType": "text",
+            "type": "equals",
+            "filter": ""
+        }
     }
 
-    fetch_step_data_filter_model = {
-        "step_name": {
-            "filterType": "text",
-            "type": "equals",
-            "filter": ""
-        },
-        "display_title": {
-            "filterType": "text",
-            "type": "equals",
-            "filter": ""
-        },
-        "step_category": {
-            "values": []
-        },
+    workflow_mapping = {
+        'workflow name': 'workflow_name',
+        'description': 'description',
+        'categories': 'tags',
+        'steps': 'steps',
+        'roles': 'roles',
+        'enable shifts': 'shift_enabled'
     }
+
+    # mandatory_basic_info_fields = ['workflow_name', 'description', ]
