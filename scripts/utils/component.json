@@ -328,6 +328,15 @@
     "type": "datagrid",
     "input": true,
     "components": []
+  },
+  "button": {
+    "label": "",
+    "showValidations": false,
+    "size": "sm",
+    "customClass": "mt-4",
+    "tableView": false,
+    "type": "button",
+    "input": true
   }
 }
 

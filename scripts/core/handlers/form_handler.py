@@ -151,6 +151,13 @@ class FormHandler:
                             col=col,
                             df=df)
 
+                    elif cell_value is not None and re.search(r"<button.*>", cell_value):
+                        components_list, _, _ = self.process_button_component(
+                            from_parent_itr=True,
+                            cell_value=cell_value,
+                            components_list=components_list)
+
+
             #storing final form json to a file
             # file_name = f'{self.sheet_name}_{self.current_ts}'
             # with open(f'assets/{file_name}.json', 'w') as json_file:
@@ -408,6 +415,16 @@ class FormHandler:
                             row=new_row,
                             col=new_col,
                             df=_df)
+
+                    elif cell_value is not None and re.search(r"<button.*>", cell_value):
+                        _, row_list, col_list = self.process_button_component(
+                            cell_value=cell_value,
+                            merge_properties=merge_properties,
+                            child=child,
+                            current_component=current_component,
+                            row_list=row_list,
+                            col_list=col_list)
+
 
                 if child == 'rows' and col_list:
                     row_list.append(col_list)
@@ -969,6 +986,41 @@ class FormHandler:
             self.update_field_props(api_key=unique_key_id, comp_data=_table_json)
 
             return components_list, row_list, col_list, _index_list
+        except Exception as row_error:
+            logger.error(row_error)
+
+
+    def process_button_component(self, from_parent_itr=False, cell_value=None, components_list=None,
+                               merge_properties=None, child=None, current_component=None, row_list=None,
+                               col_list=None):
+        try:
+            button_field = copy.deepcopy(self.component_json.get("button"))
+
+            unique_key_id = self.generate_unique_id(comp_type='button')
+            button_field["key"] = unique_key_id
+
+            _match = re.search(r'\{(.*?)\}', cell_value)
+            label = _match.group(1) if _match else ''
+            button_field['label'] = f"<h6> <b>{label}</b> </h6>"
+            # if label:
+            #     button_field['hideLabel'] = False
+
+            if from_parent_itr:
+                if button_field:
+                    components_list.append(button_field)
+            else:
+                if merge_properties:
+                    button_field['properties'] = merge_properties
+                if child == 'rows':
+                    current_component["components"].append(button_field)
+                    if current_component:
+                        col_list.append(current_component)
+                else:
+                    row_list.append(button_field)
+
+            self.update_field_props(api_key=unique_key_id, comp_data=button_field)
+
+            return components_list, row_list, col_list
         except Exception as row_error:
             logger.error(row_error)
 
