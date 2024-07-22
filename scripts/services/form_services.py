@@ -66,14 +66,15 @@ async def generate_form(
                                     current_ts=current_ts,
                                     step_data=step_data)
         response = form_handler.generate_form_json()
-        sheet_name = f'{sheet_name}_{current_ts}'
-        json_file = f'assets/{sheet_name}.json'
-        if response and os.path.exists(json_file):
-            # return FileResponse(json_file,
-            #                     headers={"Content-Disposition": f"attachment; filename={sheet_name}.json"},
-            #                     media_type="application/json")
-            return {'message': 'Step updated successfully'}
-        else:
-            return {"message": "Json error"}
+        # sheet_name = f'{sheet_name}_{current_ts}'
+        # json_file = f'assets/{sheet_name}.json'
+        return response
+        # if response and os.path.exists(json_file):
+        #     # return FileResponse(json_file,
+        #     #                     headers={"Content-Disposition": f"attachment; filename={sheet_name}.json"},
+        #     #                     media_type="application/json")
+        #     return {'message': 'Step updated successfully'}
+        # else:
+        #     return {"message": "Failed to update step"}
     except Exception as e:
         logger.exception(f"exception from generate form json logic {e}")

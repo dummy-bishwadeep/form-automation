@@ -32,7 +32,6 @@ class FormHandler:
         self.step_data = step_data
         self.property_names = []
 
-
     def generate_form_json(self):
         try:
             _, step_data = self.check_step_exists()
@@ -153,18 +152,22 @@ class FormHandler:
                             df=df)
 
             #storing final form json to a file
-            file_name = f'{self.sheet_name}_{self.current_ts}'
-            with open(f'assets/{file_name}.json', 'w') as json_file:
-                json.dump({"components": components_list}, json_file, indent=4)
-            print(f"JSON {file_name} created")
-            logger.info(f"{file_name} -> JSON created successfully!!!!!!!!!!!!")
+            # file_name = f'{self.sheet_name}_{self.current_ts}'
+            # with open(f'assets/{file_name}.json', 'w') as json_file:
+            #     json.dump({"components": components_list}, json_file, indent=4)
+            # print(f"JSON {file_name} created")
+            # logger.info(f"{file_name} -> JSON created successfully!!!!!!!!!!!!")
+
+            logger.info("JSON created successfully!!!!!!!!!!!!")
+
 
             # update step data to mongo db
-            self.update_step_data(step_data, {"components": components_list})
-            return True
+            response = self.update_step_data(step_data, {"components": components_list})
+            return response
 
         except Exception as e:
             logger.exception(f"exception from the generate form json creator {e}")
+            raise e
 
     def convert_sheet_to_df(self, sheet_name):
         try:
@@ -518,6 +521,12 @@ class FormHandler:
             _match = re.search(r'\{(.*?)\}', cell_value)
             label = _match.group(1) if _match else ''
             text_area['label'] = f"<h6> <b>{label}</b> </h6>"
+
+            if merge_properties:
+                merge_properties.update({"manual_entry": "true"})
+            else:
+                merge_properties = {"manual_entry": "true"}
+
             if merge_properties:
                 text_area['properties'] = merge_properties
             if label:
@@ -597,6 +606,15 @@ class FormHandler:
             if label:
                 date_filed['hideLabel'] = False
             self.date_keys.append(unique_key_id)
+
+            # if self.step_data.get('step_category', '') == 'step_category_102':
+            properties = {
+                "manual_entry": "true",
+                "triggerOnChange": "true",
+                "referred_key": unique_key_id,
+                "task_search_enabled": "true"
+            }
+            date_filed['properties'] = properties
 
             if from_parent_itr:
                 if date_filed:
@@ -814,7 +832,8 @@ class FormHandler:
             label = _match.group(1) if _match else 'sign'
             digital_sign['label'] = f"<h6> <b>{label}</b> </h6>"
             signature_properties = {
-                "signature_keys": unique_key_id
+                "signature_keys": unique_key_id,
+                "manual_entry": "true"
             }
             digital_sign['properties'] = signature_properties
             if merge_properties:
@@ -893,7 +912,7 @@ class FormHandler:
         try:
             datagrid_json = copy.deepcopy(self.component_json.get('dataGrid'))
 
-            unique_key_id = self.generate_unique_id(comp_type='dateGrid')
+            unique_key_id = self.generate_unique_id(comp_type='dataGrid')
             datagrid_json['key'] = unique_key_id
 
             datagrid_json, index_list = self.process_table_json(df, row, col, datagrid_json, child="dataGrid")
@@ -1019,7 +1038,6 @@ class FormHandler:
     def update_step_data(self, step_data, form_data):
         try:
             step_valid = self.validate_step(step_data, form_data)
-
             if step_valid:
                 payload = {
                     "dateKeys": self.date_keys,
@@ -1054,12 +1072,13 @@ class FormHandler:
                     response = requests.post(url, data=payload, headers=Secrets.headers, cookies=self.login_token)
                 else:
                     response = requests.post(url, json=payload, headers=Secrets.headers, cookies=self.login_token)
-
                 if response.status_code != 200:
-                    raise HTTPException(status_code=response.status_code, detail='Failed to save step')
-                response = response.json()
-                return response
-            raise HTTPException(status_code=status.HTTP_200_OK, detail='Failed to validate step')
+                    return {'message': "Failed to update step"}
+                    # raise HTTPException(status_code=response.status_code, detail='Failed to update step')
+                # response = response.json()
+                return {'message': "Updated step successfully"}
+            return {'message': "Failed to validate step"}
+            # raise HTTPException(status_code=status.HTTP_200_OK, detail='Failed to update step')
         except Exception as step_update_error:
             logger.error(step_update_error)
             raise step_update_error
