@@ -17,6 +17,7 @@ class UTCoreWorkflowAPI:
     fetch_workflow = f'{BaseURLPaths.workflow_module}/list_workflow_data'
     fetch_workflow_dropdowns = f'{BaseURLPaths.workflow_module}/load/options'
     save_workflow = f'{BaseURLPaths.workflow_module}/save'
+    fetch_params = f'{BaseURLPaths.workflow_module}/get'
 
 
 

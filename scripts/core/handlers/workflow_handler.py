@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 
 import requests
 from fastapi import HTTPException, status
@@ -63,7 +64,7 @@ class WorkflowHandler:
 
             # Updated Actions
             logger.info("Initiated update for Workflow Actions!!")
-            # workflow_data = self.update_workflow_actions(workflow_data=workflow_data)
+            workflow_data = self.update_workflow_actions(workflow_data=workflow_data)
 
             logger.info("Completed update for Workflow Actions!!")
             return self.response_message
@@ -111,6 +112,7 @@ class WorkflowHandler:
             self.format_roles_data()
             self.format_sequence_data()
             self.format_permission_data()
+            self.format_task_button_data()
         except Exception as metadata_error:
             logger.error(metadata_error)
             raise metadata_error
@@ -489,3 +491,290 @@ class WorkflowHandler:
         except Exception as permission_error:
             logger.error(permission_error)
             raise permission_error
+
+    def update_workflow_actions(self, workflow_data):
+        try:
+            workflow_id = workflow_data.get('workflow_id', '')
+            name = workflow_data.get('workflow_name', self.workflow_metadata.get('workflow_name', ''))
+            workflow_version = workflow_data.get('workflow_version', 1)
+            disable_usage_tracking = workflow_data.get('disable_usage_tracking', True)
+
+            triggers = self.generate_worflow_actions(workflow_data=workflow_data)
+            if not triggers:
+                self.response_message += 'Trigger details are missing\n'
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Trigger details are missing')
+
+            payload = {
+                "workflow_version": workflow_version,
+                "workflow_id": workflow_id,
+                "triggers": triggers,
+                "type": "actions",
+                "disable_usage_tracking": disable_usage_tracking,
+                "data": {
+                    "workflow_name": name
+                  }
+            }
+            payload.update(WorkflowConstants.workflow_dropdown_payload)
+
+            _status, response = self.update_workflow(payload=payload,
+                                                     error_message='Failed to update Workflow Actions')
+            if _status:
+                self.response_message += 'Updated workflow actions successfully\n'
+            return response
+        except Exception as actions_error:
+            logger.error(actions_error)
+            raise actions_error
+
+    def generate_worflow_actions(self, workflow_data):
+        try:
+            # convert excel data into dataframe
+            df, _, _ = self.common_utils_obj.convert_sheet_to_df(sheet_name=AppConstants.actions)
+
+            user_init_trigger_temp_data = self.extract_user_init_action_trigger()
+            trigger_type = user_init_trigger_temp_data.get('trigger_type', '')
+            trigger_fields = user_init_trigger_temp_data.get('trigger_fields', [])
+            action_templates = user_init_trigger_temp_data.get('action_templates', [])
+            task_button_mapping = self.workflow_metadata.get('task_button_view', {})
+            roles_data = self.workflow_metadata.get('roles', {})
+            mapped_action_template = self.map_action_templates(action_templates)
+
+            # remove header row
+            _df = df.copy()
+            _df = _df.drop(0).reset_index(drop=True)
+
+            # group merged rows based on specific column (here grouping based on based 1st column if rows merged)
+            merged_row_groups = self.common_utils_obj.group_merged_rows(df=_df, merge_column=0)
+
+            # check if actions already exists and extract trigger id
+            actions_exist, existing_action_data = self.check_actions_exist(workflow_data=workflow_data)
+            if actions_exist:
+                existing_action_data = self.map_actions_list(action_data=existing_action_data)
+
+            # iterate through each of the merge row group
+            triggers_list = []
+            for each in merged_row_groups:
+                group_df = _df.iloc[each].reset_index(drop=True)
+                table_no_rows, _ = group_df.shape
+                group_np = group_df.to_numpy()
+                final_task_button_data = ''
+                actions_list = []
+                roles_list = []
+                for row in range(0, table_no_rows):
+                    task_button_data = group_np[row][0]
+                    if task_button_data:
+                        task_button_data = task_button_data.strip().lower()
+                        final_task_button_data = task_button_mapping[task_button_data]
+
+                    roles = group_np[row][1]
+                    if roles:
+                        roles = [each.strip().lower() for each in roles.split(',')]
+                        roles_list = [roles_data[each_role] for each_role in roles]
+
+                    action_type = group_np[row][2]
+                    action_details = group_np[row][3]
+                    if action_type:
+                        action_type = action_type.strip().lower()
+                        configured_action_template_data = mapped_action_template[action_type]
+
+                        action_data = {}
+                        action_type = configured_action_template_data.get('action_type', '')
+                        if action_type == 'state_change' and action_details:
+                            action_data = self.format_action_type_state_change(
+                                action_template=configured_action_template_data,
+                                action_details=action_details)
+                        elif action_type == 'send_email' and action_details:
+                            pass
+                        elif action_type == 'mark_completed' and action_details:
+                            action_data = {
+                                'action_type': action_type
+                            }
+                        elif action_type == 'rest_api' and action_details:
+                            action_data = self.format_action_type_rest_api(
+                                action_template=configured_action_template_data,
+                                action_details=action_details)
+                        elif action_type == 'notification' and action_details:
+                            action_data = self.format_action_type_notification(
+                                action_template=configured_action_template_data,
+                                action_details=action_details,
+                                roles_data=roles_data)
+                        elif action_type == 'event' and action_details:
+                            pass
+                        elif action_type == 'create_batch' and action_details:
+                            pass
+                        elif action_type == 'finish_batch' and action_details:
+                            pass
+                        elif action_type == 'rest_trigger' and action_details:
+                            pass
+                        elif action_type == 'send_request_email' and action_details:
+                            pass
+                        elif action_type == 'validate' and action_details:
+                            pass
+
+                        if action_data:
+                            actions_list.append(action_data)
+
+                _existing_action_data = existing_action_data.get(final_task_button_data, {})
+                trigger_id = _existing_action_data.get('trigger_id', '')
+                trigger_meta = {
+                    'role': roles_list,
+                    'on_click': final_task_button_data
+                }
+
+                trigger_data = {
+                    'actions': actions_list,
+                    'trigger_meta': trigger_meta,
+                    'trigger_type': trigger_type,
+                    'action_templates': action_templates,
+                    'triggerFields': trigger_fields
+                }
+                if trigger_id:
+                    trigger_data.update({'trigger_id': trigger_id})
+                triggers_list.append(trigger_data)
+
+            return triggers_list
+        except Exception as actions_errors:
+            logger.error(actions_errors)
+            raise actions_errors
+
+    def extract_user_init_action_trigger(self):
+        try:
+            dropdown_data = self.workflow_metadata.get('dropdown_data', {})
+            trigger_templates = dropdown_data.get('trigger_templates', [])
+            user_init_trigger_temp_data = {}
+            for each in trigger_templates:
+                if each['trigger_type'] == 'user_init':
+                    user_init_trigger_temp_data = each
+                    break
+            return user_init_trigger_temp_data
+        except Exception as trigger_error:
+            logger.error(trigger_error)
+            raise trigger_error
+
+    @staticmethod
+    def map_action_templates(action_template):
+        try:
+            templates = {}
+            for each in action_template:
+                label = each['action_label'].lower()
+                templates[label] = each
+            return templates
+        except Exception as template_error:
+            logger.error(template_error)
+            raise template_error
+
+    def format_action_type_state_change(self, action_template, action_details):
+        try:
+            action_details = [each.strip() for each in action_details.split('=>')]
+            action_fields = action_template.get('action_fields', [])
+            action_type = action_template.get('action_type', '')
+            final_action_data = {
+                'action_type': action_type
+            }
+            for index, each in enumerate(action_fields):
+                value = each['value']
+                final_action_data[value] = action_details[index]
+            check_empty_value = any(each_ele in ['', None] for each_ele in list(final_action_data.values()))
+            if check_empty_value:
+                self.response_message += 'Action details are missing\n'
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Action details are missing')
+            return final_action_data
+        except Exception as format_error:
+            logger.error(format_error)
+            raise format_error
+
+    def format_action_type_rest_api(self, action_template, action_details):
+        try:
+            action_fields = action_template.get('action_fields', [])
+            action_type = action_template.get('action_type', '')
+
+            request_method = re.findall(r'\{([^}]*)\}', action_details)
+            request_method = request_method[0].upper() if request_method else ''
+
+            request_url = re.findall(r'<([^>]*)>', action_details)
+            request_url = request_url[0] if request_url else ''
+
+            action_details = [request_method, request_url]
+            final_action_data = {
+                'action_type': action_type
+            }
+
+            for index, each in enumerate(action_fields):
+                value = each['value']
+                final_action_data[value] = action_details[index]
+            check_empty_value = any(each_ele in ['', None] for each_ele in list(final_action_data.values()))
+            if check_empty_value:
+                self.response_message += 'Action details are missing\n'
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Action details are missing')
+            return final_action_data
+        except Exception as format_error:
+            logger.error(format_error)
+            raise format_error
+
+    def format_action_type_notification(self, action_template, action_details, roles_data):
+        try:
+            action_fields = action_template.get('action_fields', [])
+            action_type = action_template.get('action_type', '')
+
+            roles_list = re.findall(r'\[([^\]]*)\]', action_details)
+            roles_list = [roles_data[each.strip().lower()] for each in roles_list[0].split(',')] if roles_list else ''
+
+            message = re.findall(r'\{([^}]*)\}', action_details)
+            message = message[0].strip().lower() if message else ''
+
+            action_details = [roles_list, message]
+            final_action_data = {
+                'action_type': action_type
+            }
+
+            for index, each in enumerate(action_fields):
+                value = each['value']
+                final_action_data[value] = action_details[index]
+            check_empty_value = any(each_ele in ['', None] for each_ele in list(final_action_data.values()))
+            if check_empty_value:
+                self.response_message += 'Action details are missing\n'
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Action details are missing')
+            return final_action_data
+        except Exception as format_error:
+            logger.error(format_error)
+            raise format_error
+
+    def check_actions_exist(self, workflow_data):
+        try:
+            workflow_id = workflow_data.get('workflow_id', '')
+            name = workflow_data.get('workflow_name', self.workflow_metadata.get('workflow_name', ''))
+            workflow_version = workflow_data.get('workflow_version', 1)
+
+            payload = {
+                "type": "actions",
+                "workflow_id": workflow_id,
+                "workflow_name": name,
+                "workflow_version": workflow_version
+            }
+            payload.update(WorkflowConstants.workflow_dropdown_payload)
+
+            final_params = urllib.parse.urlencode({'params': json.dumps(payload)})
+
+            # fetch workflow actions
+            url = f'{EnvironmentConstants.base_path}{UTCoreWorkflowAPI.fetch_params}?{final_params}'
+
+            response = requests.get(url, headers=Secrets.headers, cookies=self.login_token)
+            if response.status_code != 200:
+                self.response_message += f'Failed to fetch workflow actions\n'
+                return False, {'message': self.response_message}
+            response = response.json()
+            return True, response.get('data', {}).get('actions', [])
+        except Exception as trigger_error:
+            logger.error(trigger_error)
+            raise trigger_error
+
+    @staticmethod
+    def map_actions_list(action_data):
+        try:
+            action_details = {}
+            for each in action_data:
+                on_click = each['trigger_meta']['on_click']
+                action_details[on_click] = each
+            return action_details
+        except Exception as map_error:
+            logger.error(map_error)
+            raise map_error

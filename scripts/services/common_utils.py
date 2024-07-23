@@ -27,3 +27,23 @@ class CommonUtils:
         # Find the index of the first True value in the mask
         next_non_none_row = mask.idxmax() if mask.any() else None
         return next_non_none_row
+
+    def group_merged_rows(self, df, merge_column=0):
+        try:
+            groups = []
+            current_group = []
+
+            for i in range(len(df)):
+                if pd.notna(df.iloc[i, merge_column]):
+                    if current_group:
+                        groups.append(current_group)
+                        current_group = []
+                current_group.append(i)
+
+            if current_group:
+                groups.append(current_group)
+
+            return groups
+        except Exception as merge_error:
+            logger.error(merge_error)
+            raise merge_error
