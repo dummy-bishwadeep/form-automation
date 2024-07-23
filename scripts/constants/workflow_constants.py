@@ -38,4 +38,9 @@ class WorkflowConstants:
         'enable shifts': 'shift_enabled'
     }
 
-    # mandatory_basic_info_fields = ['workflow_name', 'description', ]
+    workflow_dropdown_payload = {
+        "project_id": EnvironmentConstants.project_id,
+        "project_type": AutomationConstants.project_type,
+        "tz": EnvironmentConstants.tz,
+        "language": AutomationConstants.language
+    }

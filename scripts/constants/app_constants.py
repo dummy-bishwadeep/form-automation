@@ -4,6 +4,7 @@ class AppConstants:
     tz = 'tz'
     langauge = 'language'
     metadata_sheet = 'Metadata'
+    permissions = 'Permissions'
 
 class AutomationConstants:
     tz = 'Asia/Kolkata'

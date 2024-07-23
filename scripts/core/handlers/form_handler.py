@@ -32,6 +32,8 @@ class FormHandler:
         self.field_props = {}
         self.step_data = step_data
         self.property_names = []
+        self.response_messages = ''
+
 
     def generate_form_json(self):
         try:
@@ -168,16 +170,21 @@ class FormHandler:
 
             logger.info("JSON created successfully!!!!!!!!!!!!")
 
+            self.response_messages = 'JSON created successfully\n'
+
 
             # update step data to mongo db
             response = self.update_step_data(step_data, {"components": components_list})
 
+            response = [response]
             # automate workflow
             workflow_obj = WorkflowHandler(workbook=self.workbook,
                                            encrypt_payload=self.encrypt_payload,
-                                           login_token=self.login_token)
+                                           login_token=self.login_token,
+                                           step_data=response,
+                                           response_message=self.response_messages)
             response = workflow_obj.automate_workflow()
-            return response
+            return {'message': response.strip()}
 
         except Exception as e:
             logger.exception(f"exception from the generate form json creator {e}")
@@ -1122,21 +1129,30 @@ class FormHandler:
                     "tz": EnvironmentConstants.tz,
                     "language": AutomationConstants.language
                 }
+                decoded_payload = {}
 
                 # trigger step validation api
                 url = f'{EnvironmentConstants.base_path}{UTCoreStepsAPI.create_step}'
 
                 # encode payload int jwt
                 if self.encrypt_payload:
+                    decoded_payload = copy.deepcopy(payload)
                     payload = JWT().encode(payload=payload)
                     response = requests.post(url, data=payload, headers=Secrets.headers, cookies=self.login_token)
                 else:
                     response = requests.post(url, json=payload, headers=Secrets.headers, cookies=self.login_token)
                 if response.status_code != 200:
+                    self.response_messages += 'Failed to update step\n'
                     return {'message': "Failed to update step"}
                     # raise HTTPException(status_code=response.status_code, detail='Failed to update step')
-                # response = response.json()
-                return {'message': "Updated step successfully"}
+                response = response.json()
+                data = response.get('data', {})
+                self.response_messages += 'Updated steps successfully\n'
+                if self.encrypt_payload:
+                    decoded_payload.update(data)
+                    return decoded_payload
+                payload.update(data)
+                return payload
             return {'message': "Failed to validate step"}
             # raise HTTPException(status_code=status.HTTP_200_OK, detail='Failed to update step')
         except Exception as step_update_error:
@@ -1178,3 +1194,4 @@ class FormHandler:
         except Exception as validate_error:
             logger.error(validate_error)
             raise validate_error
+
