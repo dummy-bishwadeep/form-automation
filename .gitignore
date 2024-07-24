@@ -15,7 +15,6 @@ venv
 *.log
 log/UT-Automation.log
 *.log
-*.xlsx
 *.pyc
 *.log
 *.log
