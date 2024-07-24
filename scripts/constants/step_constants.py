@@ -36,3 +36,30 @@ class StepConstants:
             "values": []
         },
     }
+
+    step_metadata_mapping = {
+        'step name': 'step_name',
+        'display title': 'display_title',
+        'description': 'description',
+        'step category': 'step_category',
+        'step sub category': 'step_sub_category',
+        'menu placement': 'menu_placement',
+        'validate form': 'validate_form',
+        'auto save': 'auto_save',
+        'sheet': 'sheet'
+    }
+
+    menu_placement_mapping = {
+        "left navigation": "left_navigation",
+        "top navigation": "top_navigation"
+    }
+
+    step_category_mapping = {
+        "batch creation step": "step_category_104",
+        "non-periodic step": "step_category_100",
+        "non periodic step": "step_category_100",
+        "periodic step": "step_category_102",
+        "task creation step": "step_category_101",
+        "trigger-based step": "step_category_103",
+        "trigger based step": "step_category_103"
+    }

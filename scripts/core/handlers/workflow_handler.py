@@ -29,8 +29,15 @@ class WorkflowHandler:
             logger.info("Initiated Workflow Automation!!")
 
             # convert excel data into dataframe
+            # df, _, _ = self.common_utils_obj.convert_sheet_to_df(sheet_name=AppConstants.metadata_sheet)
+
+            # convert excel data into dataframe
             df, _, _ = self.common_utils_obj.convert_sheet_to_df(sheet_name=AppConstants.metadata_sheet)
-            df = self.extract_workflow_metadata(df=df)
+
+            # group merged rows based on specific column (here grouping based on based 1st column if rows merged)
+            merged_row_groups = self.common_utils_obj.group_merged_rows(df=df, merge_column=0)
+
+            df = self.extract_workflow_data(merged_row_groups, df)
             self.convert_workflow_metadata_to_dict(df)
 
             # check workflow data exists
@@ -72,29 +79,27 @@ class WorkflowHandler:
             logger.error(automation_error)
             raise automation_error
 
-    def extract_workflow_metadata(self, df):
+    def extract_workflow_data(self, merged_row_groups, df):
         try:
-            df = df.copy()
-            # Get the name of the first column
-            first_column = df.columns[0]
-
-            # Find the index where the value is 'Workflow' in the first column (case insensitive)
-            index_to_extract = df[first_column].str.lower().eq('workflow').idxmax()
-
-            # Find the next row with a non-None value in the specified column
-            next_non_none_row = self.common_utils_obj.find_next_non_none_row(df, (index_to_extract, 0))
-
-            # Extract all the workflow metadata rows
-            df = df.iloc[index_to_extract+1:next_non_none_row]
-
-            # delete all empty rows & columns
-            df.dropna(how='all', inplace=True)
-            df.dropna(how='all', inplace=True, axis=1)
-
-            return df
-        except Exception as metadata_error:
-            logger.error(metadata_error)
-            raise metadata_error
+            group_df = ''
+            for each in merged_row_groups:
+                group_df = df.iloc[each].reset_index(drop=True)
+                group_np = group_df.to_numpy()
+                cell_value = group_np[0][0]
+                workflow_data = False
+                if 'workflow' in cell_value.lower():
+                    workflow_data = True
+                    # Drop the first column and reset the index
+                    group_df = group_df.copy()
+                    group_df = group_df.drop(group_df.columns[0], axis=1).reset_index(drop=True)
+                if workflow_data:
+                    group_df.dropna(how='all', inplace=True)
+                    group_df.dropna(how='all', inplace=True, axis=1)
+                    break
+            return group_df
+        except Exception as extraction_error:
+            logger.error(extraction_error)
+            raise extraction_error
 
     def convert_workflow_metadata_to_dict(self, df):
         try:
