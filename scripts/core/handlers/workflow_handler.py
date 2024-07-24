@@ -9,7 +9,7 @@ from scripts.constants import EnvironmentConstants
 from scripts.constants.api_constants import UTCoreWorkflowAPI
 from scripts.constants.app_constants import AppConstants, Secrets, AutomationConstants
 from scripts.constants.workflow_constants import WorkflowConstants
-from scripts.services.common_utils import CommonUtils
+from scripts.utils.common_utils import CommonUtils
 from scripts.logging.logger import logger
 from scripts.utils.security_utils.jwt_util import JWT
 
