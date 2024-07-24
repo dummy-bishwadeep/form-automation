@@ -50,14 +50,14 @@ class StepConstants:
     }
 
     MenuPlacementDropdown = {
-        "left_navigation": "Left Navigation",
-        "top_navigation": "Top Navigation"
+        "left navigation": "Left Navigation",
+        "top navigation": "Top Navigation"
     }
 
     StepCategoryDropdown = {
-        "batch_creation_step": "Batch Creation Step",
-        "non_periodic_step": "Non-Periodic Step",
-        "periodic_step": "Periodic Step",
-        "task_creation_step": "Task Creation Step",
-        "trigger_based_step": "Trigger-based Step"
+        "batch creation step": "Batch Creation Step",
+        "non periodic step": "Non-Periodic Step",
+        "periodic step": "Periodic Step",
+        "task creation step": "Task Creation Step",
+        "trigger based step": "Trigger-based Step"
     }
