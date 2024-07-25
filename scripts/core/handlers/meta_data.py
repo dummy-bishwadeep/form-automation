@@ -20,16 +20,20 @@ class MetaData:
 
     def automate_step(self):
         try:
-            # convert excel data into dataframe
+            # Convert excel data into dataframe
             df, _, _ = self.common_utils_obj.convert_sheet_to_df(sheet_name=AppConstants.metadata_sheet)
 
-            # group merged rows based on specific column (here grouping based on based 1st column if rows merged)
+            # Group merged rows based on specific column (here grouping based on based 1st column if rows merged)
             merged_row_groups = self.common_utils_obj.group_merged_rows(df=df, merge_column=0)
 
-            df = self.extract_step_data(merged_row_groups, df=df)
-            dict_data = self.convert_data_to_dict(df)
-            step_data = self.get_final_data(dict_data)
-            final_data = self.get_meta_data(step_data)
+            step_data_frames = self.extract_step_data(merged_row_groups, df)
+
+            final_data = []
+            for step_df in step_data_frames:
+                dict_data = self.convert_data_to_dict(step_df)
+                step_data = self.get_final_data(dict_data)
+                meta_data = self.get_meta_data(step_data)
+                final_data.append(meta_data)
             return final_data
         except Exception as e:
             logger.exception(f"Error while getting meta data {e}")
@@ -37,21 +41,21 @@ class MetaData:
     def extract_step_data(self, merged_row_groups, df):
         try:
             group_df = ''
+            step_data_frames = []
             for each in merged_row_groups:
                 group_df = df.iloc[each].reset_index(drop=True)
                 group_np = group_df.to_numpy()
                 cell_value = group_np[0][0]
-                step_data = False
+                # cell_value = each_value[0]
+                # print(cell_value, cell_value_1)
                 if 'step' in cell_value.lower():
-                    step_data = True
                     # Drop the first column and reset the index
                     group_df = group_df.copy()
                     group_df = group_df.drop(group_df.columns[0], axis=1).reset_index(drop=True)
-                if step_data:
                     group_df.dropna(how='all', inplace=True)
                     group_df.dropna(how='all', inplace=True, axis=1)
-                    break
-            return group_df
+                    step_data_frames.append(group_df)
+            return step_data_frames
         except Exception as extraction_error:
             logger.error(extraction_error)
             raise extraction_error

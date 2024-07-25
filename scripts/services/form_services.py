@@ -40,18 +40,21 @@ async def generate_form(
         with open(file_path, "wb") as f:
             f.write(file_content)
         current_ts = int(time.time())
-        step_data = MetaData(file_path=file_path).automate_step()
-        sheet_name = step_data["sheet"]
-        form_handler = FormHandler(login_token=login_token,
-                                   encrypt_payload=encrypt_payload,
-                                   file_path=file_path,
-                                   sheet_name=sheet_name,
-                                   current_ts=current_ts,
-                                   step_data=step_data)
-        response = form_handler.generate_form_json()
+        step_data_list = MetaData(file_path=file_path).automate_step()
+        responses = []
+        for step_meta_data in step_data_list :
+            sheet_name = step_meta_data["sheet"]
+            form_handler = FormHandler(login_token=login_token,
+                                       encrypt_payload=encrypt_payload,
+                                       file_path=file_path,
+                                       sheet_name=sheet_name,
+                                       current_ts=current_ts,
+                                       step_data=step_meta_data)
+            response = form_handler.generate_form_json()
+            responses.append(response)
         # # sheet_name = f'{sheet_name}_{current_ts}'
         # # json_file = f'assets/{sheet_name}.json'
-        return response
+        return {"message": "Step creation successful"}
         # if response and os.path.exists(json_file):
         #     # return FileResponse(json_file,
         #     #                     headers={"Content-Disposition": f"attachment; filename={sheet_name}.json"},
