@@ -9,8 +9,6 @@ import pandas as pd
 import requests
 from fastapi import HTTPException,status
 from openpyxl.styles import Border, Side, Alignment, Font
-from openpyxl.utils import get_column_letter
-from openpyxl.utils.dataframe import dataframe_to_rows
 
 from scripts.constants import EnvironmentConstants
 from scripts.constants.api_constants import UTCoreLogbooksAPI
@@ -293,8 +291,9 @@ class TemplateHandler:
             data = TemplateConstants.default_step_template
             df = pd.DataFrame(data)
 
-            for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=False), 1):
-                for c_idx, value in enumerate(row, 1):
+            # Write the DataFrame to the worksheet without the header
+            for r_idx, row in enumerate(df.itertuples(index=False), start=1):
+                for c_idx, value in enumerate(row, start=1):
                     ws.cell(row=r_idx, column=c_idx, value=value)
 
             # Function to set column width based on the maximum length of cell values
