@@ -7,7 +7,7 @@ from starlette.responses import FileResponse
 
 from scripts.config.description import Description
 from scripts.core.handlers.template_handler import TemplateHandler
-from scripts.core.schemas.template_model import HierarchyLevelEnum
+from scripts.core.schemas.template_model import HierarchyLevelEnum, TemplateEnum
 from scripts.utils.security_utils.security import verify_cookie
 
 UPLOAD_DIR = "assets"
@@ -57,5 +57,48 @@ async def automation_template(
                                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         return response
+    except Exception as e:
+        raise e
+
+
+@template_router.post("/download_template", tags=["1. Automation Templates"],
+                      description=Description.download_template_desc)
+async def download_template(
+        select_template: TemplateEnum = Form(..., description='Select Template')
+):
+    """
+    """
+    try:
+        current_file_path = os.path.abspath(__file__)
+        template_path = current_file_path
+
+        for _ in range(3):
+            template_path = os.path.dirname(template_path)
+        file_path = os.path.join(template_path, 'templates', f'{select_template.name}.xlsx')
+        return FileResponse(file_path,
+                            headers={"Content-Disposition": f"attachment; filename={select_template.value}.xlsx"},
+                            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    except Exception as e:
+        raise e
+
+
+@template_router.post("/download_documentation", tags=["1. Automation Templates"],
+                      description=Description.download_template_desc)
+async def download_documentation():
+    """
+    """
+    try:
+        current_file_path = os.path.abspath(__file__)
+        template_path = current_file_path
+
+        for _ in range(3):
+            template_path = os.path.dirname(template_path)
+        filename = 'AutomationScriptDocumentation.docx'
+        file_path = os.path.join(template_path, 'templates', filename)
+        return FileResponse(file_path,
+                            headers={"Content-Disposition": f"attachment; filename={filename}"},
+                            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
     except Exception as e:
         raise e

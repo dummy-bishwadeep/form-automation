@@ -12,3 +12,9 @@ class HierarchyLevelEnum(str, Enum):
     l3 = 'L3'
     l4 = 'L4'
     l5 = 'L5'
+
+
+class TemplateEnum(str, Enum):
+    pgp_template = 'PGP Sample Logbook Automation Template'
+    staging_template = 'Staging Sample Logbook Automation Template'
+
